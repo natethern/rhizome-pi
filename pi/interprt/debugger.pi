@@ -1,0 +1,236 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: debugger.pi,v 1.5 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: debugger.pi,v $
+; Revision 1.5  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.4  1999/02/15 08:24:06  qfwfq
+; r5rs -- multiple values, dynamic-wind and eval
+;
+; Revision 1.3  1997/05/12 07:21:29  qfwfq
+; version 0.31 - some enhancements on error handling etc.
+;
+; Revision 1.2  1997/04/26 13:29:17  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+; Revision 1.1  1996/09/06 06:13:13  qfwfq
+; Version 0.20 unix revision is up.
+;
+
+(define (rp:get-command)
+  (do ((c #f (if (or c (and c1 (rp:char-whitespace? c1))) c c1))
+       (c1 #f (rp:char-downcase (rp:read-char))))
+    ((rp:eqv? c1 #\newline) c)))
+(define (rp:command-dispatch mess help table)
+  (mess) (rp:display " ? ")
+  (let ((func (rp:assv (rp:get-command) table))) (if func ((rp:cdr func)) (begin (rp:display help) (rp:newline))))
+  (rp:command-dispatch mess help table))
+(define (rp:query-value conti)
+  (lambda ()
+    (rp:display "Value? ")
+    (rp:catch-error (lambda (err obj) (rp:get-command) (rp:newline) (rp:print-error-message err obj) (rp:newline))
+      (let ((value (rp:read)))
+	(if (rp:get-command)
+	  (begin (rp:display "Trailing garbage after expression") (rp:newline))
+	  (rp:catch-error (lambda (err obj) (rp:newline) (rp:print-error-message err obj) (rp:newline))
+	    (rp:call-with-values
+	      (lambda ()
+		(rp:call-evaluator (rp:cons (rp:expand-syntax value) '()) (rp:top-level-environment)))
+	      conti)))))))
+(define (rp:eval-in-current-environment env)
+  (lambda ()
+    (rp:display "Expression? ")
+    (rp:catch-error (lambda (err obj) (rp:get-command) (rp:newline) (rp:print-error-message err obj) (rp:newline))
+      (let ((value (rp:read)))
+	(if (rp:get-command) (begin (rp:display "Warning: Trailing garbage after expression") (rp:newline)))
+	(rp:catch-error (lambda (err obj) (rp:newline) (rp:print-error-message err obj))
+	  (rp:call-with-values
+	    (lambda () (rp:call-evaluator (rp:cons (rp:expand-syntax value) '()) env))
+	    (lambda vals
+	      (do ((vals vals (rp:cdr vals))
+		   (prnt rp:write (lambda (v) (rp:display ", ") (rp:write v))))
+		  ((rp:null? vals))
+		(prnt (rp:car vals))))))
+	(rp:newline)))))
+(define *print-depth* 4)
+(define *print-length* 4)
+(define (rp:is-resolvant? x) (and (rp:pair? x) (rp:eq? (rp:car x) 'rp:resolvant)))
+(define rp:getdatum syntax-object->datum)
+(define (rp:debugger-print obj conv)
+  (letrec
+    ((print
+      (lambda (obj depth length conv)
+	(define (decrement n) (if n (rp:- n 1) #f))
+	(define (truncated n) (and n (rp:zero? n)))
+	(define (print-list prfx l depth conv)
+	  (cond ((truncated depth) (rp:display "##"))
+		((rp:null? l) (rp:display prfx) (rp:display ")"))
+		((truncated length) (rp:display prfx) (rp:display "..)"))
+		(else (rp:display prfx)
+		      (print (conv (rp:car l)) (decrement depth) length conv)
+		      (print-tail (conv (rp:cdr l)) (decrement depth) (decrement length) conv))))
+	(define (print-tail l depth rlen conv)
+	  (cond ((rp:null? l) (rp:display ")"))
+		((truncated rlen) (rp:display " ..)"))
+		((rp:pair? l)
+		 (rp:display " ")
+		 (print (conv (rp:car l)) depth length conv)
+		 (print-tail (conv (rp:cdr l)) depth (decrement rlen) conv))
+		(else (rp:display " . ") (print l depth length conv) (rp:display ")"))))
+	(cond ((rp:is-resolvant? obj)
+	       (rp:display "[")
+	       (print (rp:getdatum (rp:car (rp:cdr obj))) depth length (lambda (x) x))
+	       (rp:display "]"))
+	      ((rp:pair? obj) (print-list "(" obj depth conv))
+	      ((rp:vector? obj) (print-list "#(" (rp:vector->list obj) depth (lambda (x) x)))
+	      (else (rp:write obj))))))
+    (print (conv obj) *print-depth* *print-length* conv)))
+(define (rp:print-vals objs)
+  (do ((objs objs (rp:cdr objs))
+       (prnt (lambda (v) (rp:debugger-print v (lambda (x) x)))
+	     (lambda (v) (rp:display ", ") (rp:debugger-print v (lambda (x) x)))))
+      ((rp:null? objs))
+    (prnt (rp:car objs))))
+(define (rp:describe-expression exp env) (rp:debugger-print exp (lambda (exp) (rp:expression->data exp env))))
+
+(define (rp:step fn args)
+  (letrec
+    ((indent (lambda (n) (do ((i 0 (rp:+ i 1))) ((rp:= i n)) (rp:display #\space))))
+     (evalfun
+       (lambda (level conti execfun)
+	 (lambda ()
+	   (rp:call-with-values (lambda () (rp:call-with-current-continuation execfun))
+	     (lambda vals
+	       (rp:command-dispatch
+		 (lambda () (indent level) (rp:display "Return: ") (rp:print-vals vals))
+		 "step r}eturn b}reak"
+		 `((#f . ,(lambda () (rp:apply conti vals)))
+		   (#\r . ,(rp:query-value conti))
+		   (#\b . ,break))))))))
+     (stepfun
+       (lambda (level conti0)
+	 (lambda (exp env conti)
+	   (if (rp:is-resolvant? exp) (conti (rp:call-evaluator exp env)))
+	   (if (rp:eq? conti conti0)
+	     (rp:command-dispatch
+	       (lambda ()
+		 (indent (rp:- level 1)) (rp:display "Tail recursion: ")
+		 (rp:describe-expression (rp:car (rp:expression->data exp env)) env))
+	       "step n}ext r}eturn e}val b}reak"
+	       `((#f . ,(lambda () (rp:hook-evaluator (stepfun level conti) exp env conti)))
+		 (#\n . ,(lambda () (rp:call-with-values (lambda () (rp:call-evaluator exp env)) conti)))
+		 (#\r . ,(rp:query-value conti))
+		 (#\e . ,(rp:eval-in-current-environment env))
+		 (#\b . ,break)))
+	     (rp:command-dispatch
+	       (lambda ()
+		 (indent level) (rp:display "Eval: ")
+		 (rp:describe-expression (rp:car (rp:expression->data exp env)) env))
+	       "step n}ext r}eturn e}val b}reak"
+	       `((#f . ,(evalfun level conti
+			  (lambda (conti) (rp:hook-evaluator (stepfun (rp:+ level 1) conti) exp env conti))))
+		 (#\n . ,(evalfun level conti (lambda (conti) (rp:call-evaluator exp env))))
+		 (#\r . ,(rp:query-value conti))
+		 (#\e . ,(rp:eval-in-current-environment env))
+		 (#\b . ,break))))))))
+    (rp:apply-with-evaluator-hook (stepfun 0 #f) fn args)))
+
+(define rp:trace-function
+  (let ((genframe (let ((frame 0)) (lambda () (let ((n frame)) (set! frame (rp:+ n 1)) n)))))
+    (lambda (name fun)
+      (rp:hook-applicator
+	(lambda (eval fun args)
+	  (let ((f (genframe)))
+	    (rp:display #\<) (rp:write f) (rp:display ">Call: ") (rp:print-vals `((,name ,@args))) (rp:newline)
+	    (rp:call-with-values (lambda () (rp:apply-with-evaluator-hook eval fun args))
+	      (lambda vals
+		(rp:display #\<) (rp:write f) (rp:display ">Return: ") (rp:print-vals vals) (rp:newline)
+		(rp:apply rp:values vals)))))
+	fun))))
+
+(define (rp:trap-function name fun)
+  (rp:hook-applicator
+    (lambda (eval fun args)
+      (rp:call-with-current-continuation
+	(lambda (conti)
+	  (rp:command-dispatch
+	    (lambda () (rp:display "Call: ") (rp:print-vals `((,name ,@args))))
+	    "pass s}tep r}eturn b}erak"
+	    `((#f . ,(lambda () (rp:call-with-values (lambda () (rp:apply-with-evaluator-hook eval fun args)) conti)))
+	      (#\s . ,(lambda () (rp:call-with-values (lambda () (rp:step fun args)) conti)))
+	      (#\r . ,(rp:query-value conti))
+	      (#\b . ,break))))))
+    fun))
+
+(define $err '())
+
+(define (backtrace history)
+  (rp:display "Backtrace:") (rp:newline)
+  (rp:call-with-current-continuation
+    (lambda (exit)
+      (let
+	((disp1
+	   (lambda (elt)
+	     (let
+	       ((tailp (rp:car elt))
+		(exp (rp:car (rp:cdr elt)))
+		(env (rp:car (rp:cdr (rp:cdr elt)))))
+	       (if tailp (rp:display "=tail-recursion=> "))
+	       (rp:describe-expression (rp:car (rp:expression->data exp env)) env)))))
+	(do ((history history (rp:cdr history)))
+	  ((rp:null? history))
+	  (rp:call-with-current-continuation
+	    (lambda (next)
+	      (rp:command-dispatch
+		(lambda () (disp1 (rp:car history)))
+		"parent e}val b}reak a}ll q}uit"
+		`((#f . ,(lambda () (next #f)))
+		  (#\e . ,(rp:eval-in-current-environment (rp:car (rp:cdr (rp:cdr (rp:car history))))))
+		  (#\b . ,break)
+		  (#\a . ,(lambda ()
+			    (do ((history (rp:cdr history) (rp:cdr history)))
+			      ((rp:null? history) (exit (rp:void)))
+			      (disp1 (rp:car history)) (rp:newline))))
+		  (#\q . ,(lambda () (exit (rp:void)))))))))))))
+
+(define (rp:trace-error fn args)
+  (rp:call-with-current-continuation
+    (lambda (exit)
+      (letrec
+	((process-error
+	   (lambda (err obj history)
+	     (rp:newline) (rp:print-error-message err obj) (rp:newline)
+	     (set! $err history) (backtrace $err)
+	     (exit #f)))
+	 (hook-t
+	   (lambda (history conti0)
+	     (lambda (exp env conti)
+	       (if (rp:eq? conti conti0)
+		 (begin
+		   (rp:set-car! history (rp:list #t exp env))
+		   (rp:hook-evaluator (hook-t history conti) exp env conti))
+		 (let ((history (rp:cons (rp:list #f exp env) history)))
+		   (rp:catch-error
+		     (lambda (err obj) (process-error err obj history))
+		     (rp:hook-evaluator (hook history conti) exp env conti)))))))
+	 (hook
+	   (lambda (history conti0)
+	     (lambda (exp env conti)
+	       (let ((history (rp:cons (rp:list #f exp env) history)))
+		 (rp:catch-error
+		   (lambda (err obj) (process-error err obj history))
+		   (rp:hook-evaluator ((if (rp:eq? conti conti0) hook-t hook) history conti) exp env conti)))))))
+	(rp:apply-with-evaluator-hook (hook '() #f) fn args)))))

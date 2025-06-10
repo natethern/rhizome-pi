@@ -1,0 +1,53 @@
+.\" @(#)$Id: pisc.man,v 1.2 1997/05/12 07:21:06 qfwfq Exp $
+.\" $Log: pisc.man,v $
+.\" Revision 1.2  1997/05/12 07:21:06  qfwfq
+.\" version 0.31 - some enhancements on error handling etc.
+.\"
+.\" Revision 1.1  1996/12/16 06:50:44  qfwfq
+.\" Created documents
+.\"
+.TH PISC 1 "Rhizome/pi"
+.SH NAME
+pisc \- A Scheme Compiler
+.SH SYNOPSIS
+.B pisc -help
+.br
+.B pisc
+[
+.I options
+]
+.I file
+.SH DESCRIPTION
+If invoked with
+.B -help
+option,
+.B pisc
+Outputs brief summary of command line syntax. Otherwise
+.B pisc
+Converts
+.I file
+to program in C language.
+.SH OPTIONS
+.TP
+.B -module \fImodule-identifier
+Gives module name
+.I module-identifier.
+Module name is a name you
+specify to pisl when creating executable. This must be a valid
+identifier in C language. Default is the name of source file
+without ".scm" suffix (if the file name had one.)
+.TP
+.B -output \fIfilename
+Specifies file name of output. Defualt is module name with
+".c" suffix.
+.TP
+.B -mpath \fIdir
+Add named directory to search path of rp:use-macro-package.
+This option may be used multiple times.
+.TP
+.B -load \fIfilename
+Loads named file into the environment of compiler befor reading
+source file. This may be used in the purpose of defining macros
+at compile time. This option may be used multiple times.
+.SH AUTHOR
+INUJIMA Masaru (qfwfq@kt.rim.or.jp).

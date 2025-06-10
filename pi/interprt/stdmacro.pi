@@ -1,0 +1,280 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: stdmacro.pi,v 1.5 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: stdmacro.pi,v $
+; Revision 1.5  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.4  1999/02/15 08:24:08  qfwfq
+; r5rs -- multiple values, dynamic-wind and eval
+;
+; Revision 1.3  1998/07/31 11:25:31  qfwfq
+; Just a minot fix not interesting
+;
+; Revision 1.2  1997/04/26 13:29:20  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+; Revision 1.1  1996/09/06 06:13:15  qfwfq
+; Version 0.20 unix revision is up.
+;
+
+(rp:eval-in-compiler-environment
+  (begin (rp:define save-expander rp:expand-syntax)
+	 (set! rp:expand-syntax rp:identity)))
+
+(rp:define lambda
+  (rp:derivation
+    (rp:lambda (args)
+      ((rp:lambda (split-defs convert-definition)
+	 (set! split-defs
+	   (rp:lambda (body)
+	     (if (rp:null? body) (rp:cons '() '())
+	       (if (rp:pair? (rp:car body))
+		 (if (rp:eq? (rp:car (rp:car body)) 'begin)
+		   (split-defs (rp:append (rp:cdr (rp:car body)) (rp:cdr body)))
+		   (if (rp:eq? (rp:car (rp:car body)) 'define)
+		     ((rp:lambda (def rest)
+			(rp:cons (rp:cons def (rp:car rest)) (rp:cdr rest)))
+		      (convert-definition (rp:cdr (rp:car body)))
+		      (split-defs (rp:cdr body)))
+		     (rp:cons '() body)))
+	         (rp:cons '() body)))))
+	 (set! convert-definition
+	   (rp:lambda (def)
+	     (if (rp:symbol? (rp:car def)) def
+	       (rp:list (rp:car (rp:car def)) (rp:cons 'lambda (rp:cons (rp:cdr (rp:car def)) (rp:cdr def)))))))
+	 ((rp:lambda (vars body)
+	    ((rp:lambda (body)
+	       (if (rp:null? (rp:car body))
+		 (rp:cons 'rp:lambda (rp:cons vars (rp:cdr body)))
+		 (rp:list 'rp:lambda vars
+		   (rp:cons
+		     (rp:cons 'rp:lambda
+		       (rp:cons
+			 (rp:map rp:car (rp:car body))
+			 (rp:append (rp:map (rp:lambda (x) (rp:cons 'set! x)) (rp:car body)) (rp:cdr body))))
+		     (rp:map (rp:lambda (x) (rp:list 'rp:void)) (rp:car body))))))
+	     (split-defs body)))
+	  (rp:car args) (rp:cdr args)))
+       (rp:void) (rp:void)))))
+
+(rp:eval-in-compiler-environment (set! rp:expand-syntax save-expander))
+
+(rp:define let
+  (rp:derivation
+    (lambda (args)
+      (if (rp:symbol? (rp:car args))
+	(rp:cons
+	  (rp:list 'letrec
+	    (rp:list (rp:list
+	      (rp:car args)
+	      (rp:cons 'lambda
+		(rp:cons
+		  (rp:map rp:car (rp:car (rp:cdr args)))
+		  (rp:cdr (rp:cdr args))))))
+	    (rp:car args))
+	  (rp:map (lambda (x) (rp:car (rp:cdr x)))
+	    (rp:car (rp:cdr args))))
+	(rp:cons
+	  (rp:cons 'lambda
+	    (rp:cons
+	      (rp:map rp:car (rp:car args))
+	      (rp:cdr args)))
+	  (rp:map (lambda (x) (rp:car (rp:cdr x))) (rp:car args)))))))
+
+(rp:define letrec
+  (rp:derivation
+    (lambda (args)
+      (let ((bindings (rp:car args)) (body (rp:cdr args)))
+	(define (cons-setbang bindings body)
+	  (if (rp:null? bindings) body
+	    (rp:cons (rp:cons 'set! (rp:car bindings))
+	      (cons-setbang (rp:cdr bindings) body))))
+	(define (check-body body)
+	  (if (rp:pair? body)
+	    (if (rp:pair? (rp:car body))
+	      (cond ((rp:eq? (rp:car (rp:car body)) 'begin)
+		     (check-body (rp:append (rp:cdr (rp:car body)) (rp:cdr body))))
+		    ((rp:eq? (rp:car (rp:car body)) 'define) (rp:list (rp:list (rp:cons 'lambda (rp:cons '() body)))))
+		    (else body))
+	      body)
+	    body))
+	(rp:cons 'let
+	  (rp:cons (rp:map (lambda (x) (rp:list (rp:car x) '(rp:void))) bindings)
+	    (cons-setbang bindings (check-body body))))))))
+
+(rp:define cond
+  (rp:derivation
+    (lambda (args)
+      (define (clauses form)
+	(if (rp:null? form) (rp:list 'rp:void)
+	  (let ((clause (rp:car form)))
+	    (if (rp:eq? (rp:car clause) 'else)
+	      (rp:cons 'begin (rp:cdr clause))
+	      (if (rp:null? (rp:cdr clause))
+		(if (rp:null? (rp:cdr form))
+		  (rp:car clause)
+		  (let ((temp (rp:gensym)))
+		    (rp:list 'let
+		      (rp:list (rp:list temp (rp:car clause)))
+		      (rp:list 'if temp temp (clauses (rp:cdr form))))))
+		(if (rp:eq? (rp:car (rp:cdr clause)) '=>)
+		  (let ((temp (rp:gensym)))
+		    (rp:list 'let
+		      (rp:list (rp:list temp (rp:car clause)))
+		      (rp:list 'if temp
+			(rp:list (rp:car (rp:cdr (rp:cdr clause))) temp)
+			(clauses (rp:cdr form)))))
+		  (rp:list 'if
+		    (rp:car clause)
+		    (rp:cons 'begin (rp:cdr clause))
+		    (clauses (rp:cdr form)))))))))
+      (clauses args))))
+
+(rp:define and
+  (rp:derivation
+    (lambda (args)
+      (define (al list)
+	(if (rp:null? (rp:cdr list)) (rp:car list)
+	  (rp:list 'if (rp:car list) (al (rp:cdr list)) '#f)))
+      (if (rp:null? args) '#t (al args)))))
+
+(rp:define quasiquote
+  (rp:derivation
+    (lambda (args)
+      (letrec
+	((qq
+	   (lambda (level form)
+	     (cond ((rp:pair? form)
+		    (let ((car (rp:car form)) (cdr (rp:cdr form)))
+		      (cond ((rp:eq? car 'quasiquote)
+			     (rp:list 'rp:list ''quasiquote (qq (rp:cons #t level) (rp:car cdr))))
+			    ((rp:eq? car 'unquote)
+			     (if (rp:null? level) (rp:car cdr)
+			       (rp:list 'rp:list ''unquote (qq (rp:cdr level) (rp:car cdr)))))
+			    (else (qql level car cdr)))))
+		   ((rp:vector? form)
+		    (let ((list (vl form)))
+		      (if (rp:null? list) (rp:list 'rp:vector)
+			(let ((list (qql level (rp:car list) (rp:cdr list))))
+			  (if (and (rp:pair? list) (rp:eq? (rp:car list) 'rp:list))
+			    (rp:cons 'rp:vector (rp:cdr list))
+			    (rp:list 'rp:apply 'rp:vector list))))))
+		   (else (rp:list 'quote form)))))
+	 (qql
+	   (lambda (level car cdr)
+	     (if (and (rp:pair? car) (rp:eq? (rp:car car) 'unquote-splicing))
+	       (if (rp:null? cdr)
+		 (if (rp:null? level) (rp:car (rp:cdr car))
+		   (rp:list 'rp:list (rp:list 'rp:list ''unquote-splicing (qq (rp:cdr level) (rp:car (rp:cdr car))))))
+		 (let ((cdr (qq level cdr)))
+		   (if (rp:null? level)
+		     (let ((car (rp:car (rp:cdr car))))
+		       (if (and (rp:pair? cdr) (rp:eq? (rp:car cdr) 'rp:append))
+			 (rp:cons 'rp:append (rp:cons car (rp:cdr cdr)))
+			 (rp:list 'rp:append car cdr)))
+		     (let ((car (rp:list 'rp:list ''unquote-splicing (qq (rp:cdr level) (rp:car (rp:cdr car))))))
+		       (if (and (rp:pair? cdr) (rp:eq? (rp:car cdr) 'rp:list))
+			 (rp:cons 'rp:list (rp:cons car (rp:cdr cdr)))
+			 (rp:list 'rp:append (rp:list 'rp:list car) cdr))))))
+	       (let ((car (qq level car)))
+		 (if (rp:null? cdr) (rp:list 'rp:list car)
+		   (let ((cdr (qq level cdr)))
+		     (if (and (rp:pair? cdr) (rp:eq? (rp:car cdr) 'rp:list))
+		       (rp:cons 'rp:list (rp:cons car (rp:cdr cdr)))
+		       (if (and (rp:pair? cdr) (rp:eq? (rp:car cdr) 'rp:append))
+			 (if (and (rp:pair? (rp:cdr cdr))
+				  (rp:pair? (rp:car (rp:cdr cdr)))
+				  (rp:eq? (rp:car (rp:car (rp:cdr cdr))) 'rp:list))
+			   (rp:cons 'rp:append
+			     (rp:cons
+			       (rp:cons 'rp:list (rp:cons car (rp:cdr (rp:car (rp:cdr cdr)))))
+			       (rp:cdr (rp:cdr cdr))))
+			   (rp:cons 'rp:append (rp:cons (rp:list 'rp:list car) (rp:cdr cdr))))
+			 (rp:list 'rp:append (rp:list 'rp:list car) cdr)))))))))
+	 (vl (lambda (vector) (vln 0 (rp:vector-length vector) vector)))
+	 (vln
+	   (lambda (i len vector)
+	     (if (rp:= i len) '()
+	       (rp:cons (rp:vector-ref vector i) (vln (rp:+ i 1) len vector))))))
+	(qq '() (rp:car args))))))
+
+(rp:define define
+  (rp:derivation
+    (lambda (args)
+      (let ((var (rp:car args)) (body (rp:cdr args)))
+	(if (rp:symbol? var) `(rp:define ,@args)
+	  (let ((name (rp:car var)) (formal (rp:cdr var)))
+	    `(rp:define ,name (letrec ((,name (lambda ,formal ,@body))) ,name))))))))
+
+(define case
+  (rp:derivation
+    (lambda (args)
+      (let ((key (rp:gensym)))
+	(define (clause cl)
+	  (if (rp:eq? (rp:car cl) 'else) cl
+	    `((rp:memv ,key ',(rp:car cl)) ,@(rp:cdr cl))))
+	`(let ((,key ,(rp:car args)))
+	   (cond ,@(rp:map clause (rp:cdr args))))))))
+
+(define or
+  (rp:derivation
+    (lambda (args)
+      (define (ol list)
+	(if (rp:null? (rp:cdr list)) (rp:car list)
+	  (let ((temp (rp:gensym)))
+	    `(let ((,temp ,(rp:car list))) (if ,temp ,temp ,(ol (rp:cdr list)))))))
+      (if (rp:null? args) '#f (ol args)))))
+
+(define let*
+  (rp:derivation
+    (lambda (args)
+      (define (bind bindings body)
+	(if (rp:null? (rp:cdr bindings))
+	  `(let ,bindings ,@body)
+	  `(let (,(rp:car bindings)) ,(bind (rp:cdr bindings) body))))
+      (if (rp:null? (rp:car args))
+	`(let () ,@(rp:cdr args))
+	(bind (rp:car args) (rp:cdr args))))))
+
+(define do
+  (rp:derivation
+    (lambda (args)
+      (let ((loop (rp:gensym))
+	    (varspecs (rp:car args))
+	    (exit (rp:car (rp:cdr args)))
+	    (body (rp:cdr (rp:cdr args))))
+	`(letrec ((,loop (lambda ,(rp:map rp:car varspecs)
+			   (if ,(rp:car exit)
+			     ,(if (rp:null? (rp:cdr exit))
+				'(rp:void)
+				`(begin ,@(rp:cdr exit)))
+			     (begin
+			       ,@body
+			       (,loop
+				 ,@(rp:map
+				     (lambda (spec)
+				       (if (rp:null? (rp:cdr (rp:cdr spec)))
+					 (rp:car spec)
+					 (rp:car (rp:cdr (rp:cdr spec)))))
+				     varspecs)))))))
+	   (,loop ,@(rp:map (lambda (spec) (rp:car (rp:cdr spec))) varspecs)))))))
+
+(define rp:catch-error
+  (rp:derivation
+    (lambda (args) `(rp:call-with-error-handler ,(rp:car args) (lambda () ,@(rp:cdr args))))))
+
+(define delay
+  (rp:derivation (lambda (args) `(rp:make-promise (lambda () ,@args)))))

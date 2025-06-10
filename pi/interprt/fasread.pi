@@ -1,0 +1,202 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: fasread.pi,v 1.2 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: fasread.pi,v $
+; Revision 1.2  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.1  1998/07/31 11:29:25  qfwfq
+; Features addition for release 0.45
+;
+
+(define rp:car car)
+(define rp:cdr cdr)
+(define rp:cons cons)
+(define rp:null? null?)
+(define rp:eqv? eqv?)
+(define rp:list list)
+(define rp:length length)
+(define rp:reverse reverse)
+(define rp:make-vector make-vector)
+(define rp:vector vector)
+(define rp:vector-length vector-length)
+(define rp:vector-ref vector-ref)
+(define rp:vector-set! vector-set!)
+(define rp:= =)
+(define rp:< <)
+(define rp:<= <=)
+(define rp:+ +)
+(define rp:- -)
+(define rp:* *)
+(define rp:remainder remainder)
+(define rp:integer->char integer->char)
+(define rp:char->integer char->integer)
+(define rp:char-whitespace? char-whitespace?)
+(define rp:string string)
+(define rp:string->symbol string->symbol)
+(define rp:string->number string->number)
+(define rp:apply apply)
+(define rp:memv memv)
+(define rp:assv assv)
+(define rp:eof-object? eof-object?)
+
+(define rp:fas-read
+  (letrec ((read-literal-table
+	     (lambda (lit-list s-dat synerr next-char proc)
+	       (skip-whitespace s-dat next-char
+		 (lambda (c s-dat) (parse-literal-desc lit-list c s-dat synerr next-char proc)))))
+	   (parse-literal-desc
+	     (lambda (lit-list c s-dat synerr next-char proc)
+	       (case c
+		 ((#\s) (get-string '() s-dat next-char
+			  (lambda (s s-dat)
+			    (read-literal-table (rp:cons (rp:string->symbol s) lit-list)
+						s-dat synerr next-char proc))))
+		 ((#\g) (read-literal-table (rp:cons (rp:gensym) lit-list) s-dat synerr next-char proc))
+		 ((#\n) (get-string '() s-dat next-char
+			  (lambda (s s-dat)
+			    (let ((n (rp:string->number s)))
+			      (if n (read-literal-table (rp:cons n lit-list) s-dat synerr next-char proc)
+				    (gen-error s-dat synerr))))))
+		 ((#\S) (get-string '() s-dat next-char
+			  (lambda (s s-dat) (read-literal-table (rp:cons s lit-list) s-dat synerr next-char proc))))
+		 ((#\z) (proc lit-list s-dat))
+		 (else (gen-error s-dat synerr)))))
+	   (construct-object
+	     (lambda (stack sdepth literals nlits s-dat result synerr next-char)
+	       (skip-whitespace s-dat next-char
+		 (lambda (c s-dat) (parse-object-desc c stack sdepth literals nlits s-dat result synerr next-char)))))
+	   (parse-object-desc
+	     (lambda (c stack sdepth literals nlits s-dat result synerr next-char)
+	       (cond ((rp:eqv? c #\p)
+		      (get-digits 0 s-dat next-char
+			(lambda (n s-dat)
+			  (if (rp:<= 0 n sdepth)
+			    (do ((l '() (rp:cons (rp:car stack) l)) (stack stack (rp:cdr stack)) (i n (rp:- i 1)))
+				((rp:= i 0)
+				 (construct-object (rp:cons l stack) (rp:- sdepth n -1) literals nlits
+						   s-dat result synerr next-char)))
+			    (gen-error s-dat synerr)))))
+		     ((rp:eqv? c #\P)
+		      (get-digits 0 s-dat next-char
+			(lambda (n s-dat)
+			  (if (rp:<= 1 (rp:+ n 1) sdepth)
+			    (do ((l (rp:car stack) (rp:cons (rp:car stack) l))
+				 (stack (rp:cdr stack) (rp:cdr stack)) (i n (rp:- i 1)))
+				((rp:= i 0)
+				 (construct-object (rp:cons l stack) (rp:- sdepth n) literals nlits
+						   s-dat result synerr next-char)))
+			    (gen-error s-dat synerr)))))
+		     ((rp:eqv? c #\l)
+		      (get-digits 0 s-dat next-char
+			(lambda (n s-dat)
+			  (if (rp:< -1 n nlits)
+			    (construct-object (rp:cons (rp:vector-ref literals n) stack) (rp:+ sdepth 1) literals nlits
+					      s-dat result synerr next-char)
+			    (gen-error s-dat synerr)))))
+		     ((rp:assv c '((#\t . #t) (#\f . #f) (#\n . ()))) =>
+		      (lambda (p) (construct-object (rp:cons (rp:cdr p) stack) (rp:+ sdepth 1) literals nlits
+						    s-dat result synerr next-char)))
+		     ((rp:memv c '(#\i #\j))
+		      (get-digits 0 s-dat next-char
+			(lambda (n s-dat)
+			  (construct-object (rp:cons (if (rp:eqv? c #\i) n (rp:- n)) stack) (rp:+ sdepth 1)
+					    literals nlits s-dat result synerr next-char))))
+		     ((rp:eqv? c #\c)
+		      (get-hex-char s-dat next-char
+			(lambda (c s-dat) (construct-object (rp:cons c stack) (rp:+ sdepth 1) literals nlits
+							    s-dat result synerr next-char))))
+		     ((rp:eqv? c #\m)
+		      (construct-object (rp:cons (rp:syntax-mark) stack) (rp:+ sdepth 1) literals nlits
+					s-dat result synerr next-char))
+		     ((rp:eqv? c #\v)
+		      (get-digits 0 s-dat next-char
+			(lambda (n s-dat)
+			  (if (rp:<= 0 n sdepth)
+			    (let ((v (rp:make-vector n)))
+			      (do ((i (rp:- n 1) (rp:- i 1)) (stack stack (rp:cdr stack)))
+				((rp:< i 0)
+				 (construct-object (rp:cons v stack) (rp:- sdepth n -1) literals nlits
+						   s-dat result synerr next-char))
+				(rp:vector-set! v i (rp:car stack))))
+			    (gen-error s-dat synerr)))))
+		     ((rp:eqv? c #\#)
+		      (if (rp:= sdepth 1) (result (rp:car stack) #f s-dat) (gen-error s-dat synerr)))
+		     (else (gen-error s-dat synerr)))))
+	   (gen-error
+	     (lambda (s-dat synerr)
+	       (synerr #f "bogus fasload syntax" s-dat)))
+	   (skip-whitespace
+	     (lambda (s-dat next-char proc)
+	       (next-char s-dat
+			  (lambda (c s-dat) (if (rp:char-whitespace? c) (skip-whitespace s-dat next-char proc)
+									(proc c s-dat)))
+			  #t)))
+	   (get-string
+	     (lambda (l s-dat next-char proc)
+	       (next-char s-dat (lambda (c s-dat) (collect-chars c l s-dat next-char proc)) #t)))
+	   (collect-chars
+	     (lambda (c l s-dat next-char proc)
+	       (cond ((rp:eqv? c #\#)
+		      (get-hex-char s-dat next-char
+			(lambda (c s-dat) (get-string (cons c l) s-dat next-char proc))))
+		     ((rp:char-whitespace? c) (proc (rp:apply rp:string (rp:reverse l)) s-dat))
+		     (else (get-string (cons c l) s-dat next-char proc)))))
+	   (get-hex-char
+	     (lambda (s-dat next-char proc)
+	       (next-char s-dat
+			  (lambda (hn s-dat)
+			    (next-char s-dat
+				       (lambda (ln s-dat) (proc (two-nibbles->char hn ln) s-dat))
+				       #t))
+			  #t)))
+	   (two-nibbles->char
+	     (let ((nibble (lambda (c) (rp:remainder (rp:char->integer c) 16))))
+	       (lambda (hn ln) (rp:integer->char (rp:+ (rp:* (nibble hn) 16) (nibble ln))))))
+	   (get-digits
+	     (lambda (n s-dat next-char proc)
+	       (next-char s-dat
+			  (lambda (c s-dat)
+			    (if (or (rp:eof-object? c) (rp:char-whitespace? c)) (proc n s-dat)
+			      (get-digits (rp:+ (rp:* n 10) (rp:char->integer c) -48) s-dat next-char proc)))
+			  #f))))
+    (lambda (s-dat result synerr next-char)
+      (read-literal-table '() s-dat synerr next-char
+	(lambda (lit-list s-dat)
+	  (construct-object '() 0 (rp:apply rp:vector (rp:reverse lit-list)) (rp:length lit-list)
+			    s-dat result synerr next-char))))))
+
+(define rp:fas-constants
+  (let ((make-deriv (lambda (v) (rp:derivation (lambda (args) `(quote ,(rp:vector-ref v (rp:car args))))))))
+    (lambda (descs nroots leaves)
+      (let ((ndescs (rp:vector-length descs)) (nleaves (rp:vector-length leaves)))
+	(let ((vw (rp:make-vector ndescs)) (vr (rp:make-vector nleaves)))
+	  (do ((i 0 (rp:+ i 1))) ((rp:eqv? i nroots)) (rp:vector-set! vw i (rp:vector-ref descs i)))
+	  (do ((i nroots (rp:+ i 1))) ((rp:eqv? i ndescs))
+	    (rp:vector-set! vw i
+	      (let ((desc (rp:vector-ref descs i)))
+		(case (rp:car desc)
+		  ((l) (do ((obj (rp:vector-ref vw (rp:car (rp:cdr desc)))
+				 (rp:cons (rp:vector-ref vw (rp:car elts)) obj))
+			    (elts (rp:cdr (rp:cdr desc)) (rp:cdr elts)))
+			   ((rp:null? elts) obj)))
+		  ((v) (let ((elts (rp:cdr desc)))
+			 (let ((len (rp:vector-length elts)))
+			   (let ((obj (rp:make-vector len)))
+			     (do ((i 0 (rp:+ i 1))) ((rp:eqv? i len) obj)
+			       (rp:vector-set! obj i (rp:vector-ref vw (rp:vector-ref elts i))))))))))))
+	  (do ((i 0 (rp:+ i 1))) ((rp:eqv? i nleaves))
+	    (rp:vector-set! vr i (rp:vector-ref vw (rp:vector-ref leaves i))))
+	  (make-deriv vr))))))

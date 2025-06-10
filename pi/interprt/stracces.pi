@@ -1,0 +1,191 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: stracces.pi,v 1.3 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: stracces.pi,v $
+; Revision 1.3  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.2  1999/06/15 07:24:10  qfwfq
+; Add packed buffer
+;
+; Revision 1.1  1997/10/16 06:25:32  qfwfq
+; Release version 0.40
+;
+
+(define (rp:make-struct-setvals initialize nelts elements offsets types)
+  (lambda (x)
+    (define valset (rp:make-vector nelts #f))
+    (define valexp (rp:make-vector nelts))
+    (define (make-ops struct enames evalues)
+      (define (construct contig i)
+	(cond ((rp:eqv? i nelts) (if contig (syntax (() . ())) (syntax ())))
+	      ((and contig (rp:not (rp:= contig (rp:vector-ref offsets i))))
+	       (with-syntax ((tail (construct #f i))) (syntax ((). tail))))
+	      ((rp:vector-ref valset i)
+	       (cond ((rp:assq (rp:vector-ref types i)
+			       '((integer . 0) (cardinal . 1) (string . 4) (buffer . 5) (procedure . 6))) =>
+		      (lambda (p)
+			(with-syntax (((av . tail) (construct (rp:+ (rp:vector-ref offsets i) 4) (rp:+ i 1)))
+				      ((val) (rp:vector-ref valexp i)) (s struct)
+				      (off (rp:vector-ref offsets i)) (tcode (rp:cdr p)))
+			  (if contig
+			    (syntax ((tcode val . av) . tail))
+			    (syntax ((rp:store-external-data s off (rp:external-arguments tcode val . av)) . tail))))))
+		     ((rp:eq? (rp:vector-ref types i) 'float)
+		      (with-syntax (((av . tail) (construct (rp:+ (rp:vector-ref offsets i) 8) (rp:+ i 1)))
+				    ((val) (rp:vector-ref valexp i)) (s struct)
+				    (off (rp:vector-ref offsets i)))
+			(if contig
+			  (syntax ((2 (rp:void) 3 val . av) . tail))
+			  (syntax ((rp:store-external-data s off
+				     (rp:external-arguments 2 (rp:void) 3 val . av)) . tail)))))
+		     (else (with-syntax ((l (construct #f (rp:+ i 1)))
+					 (t (construct1
+					      struct (rp:vector-ref offsets i)
+					      (rp:vector-ref valexp i) (rp:vector-ref types i))))
+			     (if contig (syntax (() t . l)) (syntax (t . l)))))))
+	      (else (with-syntax ((tail (construct #f (rp:+ i 1))))
+		      (if contig (syntax (() . tail)) (syntax tail))))))
+      (define (construct1 struct o v t)
+	(cond ((rp:assq t '((integer . 0) (cardinal . 1) (string . 4) (buffer . 5) (procedure . 6))) =>
+	       (lambda (p)
+		 (with-syntax (((val) v) (s struct) (off o) (tcode (rp:cdr p)))
+		   (syntax (rp:store-external-data s off (rp:external-arguments tcode val))))))
+	      ((rp:eq? t 'float)
+	       (with-syntax (((val) v) (s struct) (off o))
+		 (syntax (rp:store-external-data s off (rp:external-arguments 2 (rp:void) 3 val)))))
+	      ((rp:assq t '((short-integer . #t) (short-cardinal . #f))) =>
+	       (lambda (p)
+		 (with-syntax (((val) v) (s struct) (off o) (sig (rp:cdr p)))
+		   (syntax (rp:store-external-halfword s off sig val)))))
+	      ((rp:eq? (rp:car t) 'byte-array)
+	       (with-syntax (((val) v) (s struct) (off o) (len (rp:car (rp:cdr t))))
+		 (syntax (rp:store-external-chars s off val len))))
+	      ((rp:eq? (rp:car t) 'array)
+	       (with-syntax ((off o) (n (rp:car (rp:cdr t))) (es (rp:car (rp:cdr (rp:cdr t)))))
+		 (define (mkop ev) (construct1 struct (syntax eoff) ev (rp:car (rp:cdr (rp:cdr (rp:cdr t))))))
+		 (syntax-case v ()
+		   ((ev)
+		    (with-syntax ((op (mkop (syntax ev))))
+		      (syntax (do ((k 0 (rp:+ k 1)) (eoff off (rp:+ eoff es))) ((rp:eqv? k n)) op))))
+		   ((k ev)
+		    (with-syntax ((op (mkop (syntax ev))))
+		      (syntax (do ((k 0 (rp:+ k 1)) (eoff off (rp:+ eoff es))) ((rp:eqv? k n)) op))))
+		   ((k c ev)
+		    (with-syntax ((op (mkop (syntax ev))))
+		      (syntax (do ((k 0 (rp:+ k 1)) (eoff off (rp:+ eoff es))) ((rp:eqv? k n)) (if c op))))))))
+	      ((rp:eq? (rp:car t) 'structure)
+	       (with-syntax ((so struct) (off o))
+		 (with-syntax ((s (syntax (rp:skip-buffer-element so off))) (vals v)
+			       (sv (implicit-identifier (syntax setvals) (rp:car (rp:cdr t)))))
+		   (syntax (let ((ss s)) (sv ss . vals))))))))
+      (rp:for-each
+	(lambda (ename evalue)
+	  (let efind ((i 0))
+	    (cond ((rp:eqv? i nelts) (syntax-error ename "no such structure element"))
+		  ((rp:eq? (syntax-object->datum ename) (rp:vector-ref elements i))
+		   (rp:vector-set! valset i #t)
+		   (rp:vector-set! valexp i evalue))
+		  (else (efind (rp:+ i 1))))))
+	enames evalues)
+      (syntax-case (construct #f 0) ()
+	(() (syntax ((rp:void))))
+	(l (syntax l))))
+    (syntax-case x ()
+      ((_ s (#t ipara ...) . vals)
+       (with-syntax ((initialize initialize)) (syntax (initialize s ipara ... . vals))))
+      ((_ s (ename . evalue) ...)
+       (with-syntax (((store-ops ...) (make-ops (syntax ss) (syntax (ename ...)) (syntax (evalue ...)))))
+	 (syntax (let ((ss s)) store-ops ...)))))))
+
+(define (rp:make-struct-getvals nelts elements offsets types)
+  (lambda (x)
+    (define valvar (rp:make-vector nelts #f))
+    (define (make-binds struct bexp enames evars)
+      (define (construct contig coff i)
+	(cond ((rp:eqv? i nelts)
+	       (if contig (with-syntax ((b bexp) (c contig)) (syntax (() c . b))) bexp))
+	      ((and contig (rp:not (rp:= coff (rp:vector-ref offsets i))))
+	       (with-syntax ((c contig) (bb (construct #f #f i))) (syntax (() c . bb))))
+	      ((rp:vector-ref valvar i) =>
+	       (lambda (ev)
+		 (cond ((rp:assq (rp:vector-ref types i)
+				 '((integer 4 . 0) (cardinal 4 . 1) (float 8 . 2)
+				   (string 4 . 5) (buffer 4 . 5) (procedure 4 . 6))) =>
+			(lambda (p)
+			  (if contig
+			    (with-syntax ((c contig) (vv ev))
+			      (with-syntax (((codes vs . b)
+					     (construct (syntax (vv . c))
+							(rp:+ (rp:vector-ref offsets i) (rp:car (rp:cdr p)))
+							(rp:+ i 1)))
+					    (tcode (rp:cdr (rp:cdr p))))
+				(syntax ((tcode . codes) vs . b))))
+			    (with-syntax ((vv ev))
+			      (with-syntax (((codes vs . b)
+					     (construct (syntax (vv))
+							(rp:+ (rp:vector-ref offsets i) (rp:car (rp:cdr p)))
+							(rp:+ i 1)))
+					    (tcode (rp:cdr (rp:cdr p))) (s struct) (off (rp:vector-ref offsets i)))
+				(syntax (rp:apply (lambda vs b) (rp:load-external-data s off '(tcode . codes)))))))))
+		       (else (with-syntax ((bb (construct #f #f (rp:+ i 1)))
+					   (l1 (construct1 (rp:vector-ref offsets i) (rp:vector-ref types i)))
+					   (vv ev))
+			       (if contig
+				 (with-syntax ((c contig)) (syntax (() c . (let ((vv l1)) bb))))
+				 (syntax (let ((vv l1)) bb))))))))
+	      (else (with-syntax ((bb (construct #f #f (rp:+ i 1))))
+		      (if contig (with-syntax ((c contig)) (syntax (() c . bb))) (syntax bb))))))
+      (define (construct1 o t)
+	(cond ((rp:assq t '((integer . 0) (cardinal . 1) (float . 2) (string . 5) (buffer . 5) (procedure . 6))) =>
+	       (lambda (p)
+		 (with-syntax ((s struct) (off o) (tcode (rp:cdr p)))
+		   (syntax (rp:car (rp:load-external-data s off '(tcode)))))))
+	      ((rp:assq t '((short-integer . #t) (short-cardinal . #f))) =>
+	       (lambda (p)
+		 (with-syntax ((s struct) (off o) (sig (rp:cdr p)))
+		   (syntax (rp:load-external-halfword s off sig)))))
+	      ((rp:eq? (rp:car t) 'byte-array)
+	       (with-syntax ((s struct) (off o) (len (rp:car (rp:cdr t))))
+		 (syntax (rp:load-external-chars s off len))))
+	      ((rp:eq? (rp:car t) 'array)
+	       (with-syntax ((off o) (n (rp:car (rp:cdr t))) (es (rp:car (rp:cdr (rp:cdr t))))
+			     (op (construct1 (syntax eoff) (rp:car (rp:cdr (rp:cdr (rp:cdr t)))))))
+		 (syntax (let ((v (rp:make-vector n)))
+			   (do ((k 0 (rp:+ k 1)) (eoff off (rp:+ eoff es))) ((rp:eqv? k n) v)
+			     (rp:vector-set! v k op))))))
+	      ((rp:eq? (rp:car t) 'structure)
+	       (with-syntax ((s struct) (off o))
+		 (syntax (rp:skip-buffer-element s off))))))
+      (rp:for-each
+	(lambda (ename evar)
+	  (let efind ((i 0))
+	    (cond ((rp:eqv? i nelts) (syntax-error ename "no such structure element"))
+		  ((rp:eq? (syntax-object->datum ename) (rp:vector-ref elements i)) (rp:vector-set! valvar i evar))
+		  (else (efind (rp:+ i 1))))))
+	enames evars)
+      (construct #f #f 0))
+    (syntax-case x ()
+      ((_ s ((evar ename) ...) body ...)
+       (with-syntax ((bb (make-binds (syntax ss) (syntax (let-syntax () body ...))
+				     (syntax (ename ...)) (syntax (evar ...)))))
+	 (syntax (let ((ss s)) bb)))))))
+
+(define (rp:convert-constant l)
+  (lambda (x)
+    (syntax-case x ()
+      ((_ idsym)
+       (cond ((rp:assq (syntax-object->datum (syntax idsym)) l) => (lambda (p) (rp:car (rp:cdr p))))
+	     (else (syntax-error x "no such member in constant declaration")))))))

@@ -1,0 +1,105 @@
+;;;; @(#)$Id: bootrc.pi,v 1.7 1999/02/15 08:37:15 qfwfq Exp $
+; $Log: bootrc.pi,v $
+; Revision 1.7  1999/02/15 08:37:15  qfwfq
+; port to Microsoft C compiler
+;
+; Revision 1.6  1998/07/31 11:06:38  qfwfq
+; Fasloader support
+;
+; Revision 1.5  1997/10/20 04:19:38  qfwfq
+; Some enhancements in startup of interpreter.
+;
+; Revision 1.4  1997/05/12 07:21:15  qfwfq
+; version 0.31 - some enhancements on error handling etc.
+;
+; Revision 1.3  1997/04/26 13:29:04  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+; Revision 1.2  1996/10/10 08:26:55  qfwfq
+; Ported to Win32 environment.
+;
+; Revision 1.1  1996/09/06 06:11:23  qfwfq
+; Version 0.20 unix revision is up.
+; Renamed pi.h to rhiz_pi.h for compiler support.
+; Split scheme.pi to interprt/*.pi files, load them with bootrc.pi.
+;
+
+(rp:define rp:*bootfile-dir* (vector-ref (rp:command-line-arguments) 0))
+(rp:define load rp:load)
+(rp:define rp:load-boot-module (rp:lambda (f) (load (string-append rp:*bootfile-dir* "/" f))))
+
+(rp:define rp:car car)
+(rp:define rp:cdr cdr)
+(rp:define rp:cons cons)
+(rp:define rp:null? null?)
+(rp:define rp:eqv? eqv?)
+(rp:define rp:list list)
+(rp:define rp:length length)
+(rp:define rp:reverse reverse)
+(rp:define rp:make-vector make-vector)
+(rp:define rp:vector vector)
+(rp:define rp:vector-length vector-length)
+(rp:define rp:vector-ref vector-ref)
+(rp:define rp:vector-set! vector-set!)
+(rp:define rp:= =)
+(rp:define rp:< <)
+(rp:define rp:<= <=)
+(rp:define rp:+ +)
+(rp:define rp:- -)
+(rp:define rp:* *)
+(rp:define rp:remainder remainder)
+(rp:define rp:integer->char integer->char)
+(rp:define rp:char->integer char->integer)
+(rp:define rp:char-whitespace? char-whitespace?)
+(rp:define rp:string string)
+(rp:define rp:apply apply)
+(rp:define rp:memv memv)
+(rp:define rp:assv assv)
+(rp:define rp:eof-object? eof-object?)
+(rp:define rp:string->symbol string->symbol)
+
+(rp:define cm-path-separate-char (rp:lambda () #\/))
+(rp:define cm-list-separate-char (rp:lambda () #\space))
+(rp:define cm-lib-environment-var (rp:lambda () "RHIZOME_LIB"))
+(rp:define cm-macro-path-var (rp:lambda () "RHIZOME_MACRO_PATH"))
+(rp:define cm-startup-cmd-var (rp:lambda () "RHIZOME_PI_RC"))
+(rp:define cm-sigint-no (rp:lambda () 2))
+(rp:define cm-platform-id (rp:lambda () '(#f #f #f)))
+
+(rp:load-boot-module "privates.pi")
+(rp:load-boot-module "stdmacro.pi")
+(rp:load-boot-module "scheme.pi")
+
+(let ((macro-list '()))
+  (define (add-macro n f) (set! macro-list (cons (cons n f) macro-list)))
+  (define primitive-list
+    `((quote ,@(lambda (val) `(quote ,val)))
+      (rp:lambda ,@(lambda (ll . bodies) `(rp:lambda ,ll ,@(map expand bodies))))
+      (if ,@(lambda exps `(if ,@(map expand exps))))
+      (set! ,@(lambda (var val) `(set! ,var ,(expand val))))
+      (begin ,@(lambda bodies `(begin ,@(map expand bodies))))
+      (rp:define ,@(lambda (var val) `(rp:define ,var ,(expand val))))))
+  (define (expand exp)
+    (if (pair? exp)
+      (let ((func (car exp)) (args (cdr exp)))
+	(cond ((not (symbol? func)) (map expand exp))
+	      ((assq func primitive-list) => (lambda (p) (apply (cdr p) args)))
+	      ((assq func macro-list) => (lambda (p) (expand ((cdr p) args))))
+	      (else (cons func (map expand args)))))
+      exp))
+  (call-with-input-file (string-append rp:*bootfile-dir* "/stdmacro.pi")
+    (lambda (p)
+      (do ((exp (read p) (read p))) ((eof-object? exp))
+	(if (eq? (car exp) 'rp:eval-in-compiler-environment)
+	  (eval (cadr exp))
+	  (add-macro (cadr exp) (eval (cadr (caddr exp))))))))
+  (set! rp:expand-syntax expand))
+
+(rp:load-boot-module "scheme.pi")
+(rp:load-boot-module "expand.pi")
+(rp:load-boot-module "stdsyn.pi")
+;(rp:load-boot-module "debugger.pi")
+;(rp:load-boot-module "dbgsyn.pi")
+
+(rp:load-boot-module "pi.pi")
+(rp:load-boot-module "toplevel.pi")

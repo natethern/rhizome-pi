@@ -1,0 +1,76 @@
+# @(#)$Header: /u/master/rhizome/config/unix/linux/Makefile.kappa,v 1.4 2005/11/10 08:47:34 qfwfq Exp $
+# $Log: Makefile.kappa,v $
+# Revision 1.4  2005/11/10 08:47:34  qfwfq
+# Option to distinguish pointers by function alignment.
+#
+# Revision 1.3  2005/08/30 07:49:25  qfwfq
+# New make target install_embed, libraries for embedding into other apps.
+#
+# Revision 1.2  2004/07/23 04:46:31  qfwfq
+# change -m option in CFLAGS
+#
+# Revision 1.1  2002/09/27 08:37:28  qfwfq
+# Add support of linux and lcc-win32.
+#
+
+CDEBUGFLAGS=-O2
+#CDEBUGFLAGS=-g -DREPORT_STATS
+
+TESTEXE=a.out
+MODULE=rhizome
+
+SYMBOL=symb_23.o
+
+CC=gcc
+INCLDIR=../include
+CFLAGS=$(CDEBUGFLAGS) -mtune=i686 -falign-functions -DRK_BIND_STATIC -I$(INCLDIR)
+PIC_CFLAGS=-fpic $(CDEBUGFLAGS) -mtune=i686 -falign-functions -DRK_BIND_EXPORT -I$(INCLDIR)
+RANLIB=ranlib
+SYSLIBS=-lpthread -lm -ldl
+
+OBJS=cellhdlr.o $(SYMBOL) runengin.o read.o write.o number.o ldso.o
+SOBJS=${OBJS:.o=.so}
+SHAREOBJ=$(MODULE).so
+LIBRARY=lib$(MODULE).a
+EMBEDLIB=lib$(MODULE)_e.a
+HDRS=$(INCLDIR)/rhiz_cnf.h $(INCLDIR)/rhizome.h
+
+.SUFFIXES:
+.SUFFIXES: .o .so .c
+
+.c.so:; $(CC) $(PIC_CFLAGS) -o $@ -c $<
+
+all: $(SHAREOBJ) $(LIBRARY)
+
+embed: $(EMBEDLIB)
+
+$(SHAREOBJ): $(SOBJS)
+	$(LD) -x -r -o $@ $^
+
+$(LIBRARY): $(OBJS)
+	$(AR) $(ARFLAGS) $@ $^
+	$(RANLIB) $@
+
+$(EMBEDLIB): $(SOBJS)
+	$(AR) $(ARFLAGS) $@ $^
+	$(RANLIB) $@
+
+test: $(LIBRARY)
+	$(CC) $(CFLAGS) test.c ./$(LIBRARY) $(SYSLIBS)
+
+$(OBJS) $(SOBJS): $(HDRS)
+
+install_headers:
+	cd ../include; install -c -m 444 rhiz_cnf.h rhizome.h $(LIBDIR)
+
+install: install_headers $(LIBRARY)
+	@set -x; install -c $(LIBRARY) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(LIBRARY); chmod 444 $(LIBDIR)/$(LIBRARY)
+
+install_embed: install_headers $(EMBEDLIB)
+	@set -x; install -c $(EMBEDLIB) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(EMBEDLIB); chmod 444 $(LIBDIR)/$(EMBEDLIB)
+
+clean:
+	rm -f *.so *.o $(TESTEXE) core.*
+
+clobber: clean
+	rm -f $(LIBRARY) $(EMBEDLIB)

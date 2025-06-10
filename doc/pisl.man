@@ -1,0 +1,174 @@
+.\" @(#)$Id: pisl.man,v 1.5 1999/03/15 12:56:36 qfwfq Exp $
+.\" $Log: pisl.man,v $
+.\" Revision 1.5  1999/03/15 12:56:36  qfwfq
+.\" enable -loadable in Win32 Visual C++ environment
+.\"
+.\" Revision 1.4  1998/07/31 11:49:07  qfwfq
+.\" Features addition for release 0.45
+.\"
+.\" Revision 1.3  1997/10/16 06:24:01  qfwfq
+.\" Release version 0.40
+.\"
+.\" Revision 1.2  1997/04/26 13:28:54  qfwfq
+.\" Version 0.30 - hygienic macro system with syntax-case
+.\"
+.\" Revision 1.1  1996/12/16 06:50:44  qfwfq
+.\" Created documents
+.\"
+.TH PISL 1 "Rhizome/pi"
+.SH NAME
+pisl \- A Scheme Linker
+.SH SYNOPSIS
+.B pisl -help
+.br
+.B pisl
+[
+.I options
+]
+.I module-specifier ...
+.SH DESCRIPTION
+If invoked with
+.B -help
+option,
+.B pisl
+Outputs brief summary of command line syntax. Otherwise
+.B pisl
+binds modules specified by
+.I module-specifier
+together and generates executable file.
+.SH OPTIONS
+.TP
+.B -cc \fIcc-command-line
+Specify command line of C compiler. Default is printed in the
+output of `pisl -help'.
+.TP
+.B -ld \fIld-command-line
+Specify command line of linker. Default is printed in the
+output of `pisl -help'.
+.TP
+.B -nold
+Supress execution of linker.
+.TP
+.B -nolib
+Supress linking with default run time library. Default library
+specification is printed in the output of `pisl -help'.
+.TP
+.B -loadable
+Create shared object insted of executable. Resulting object can
+be loaded by the procedure rp:load-compiled-module.
+In some environment, this option is not supported.
+.TP
+.B -static
+Make resulting executable run without specific shared object.
+Size of executable file becomes substantially large. In some
+environment, this option is always in effect.
+.TP
+.B -modlib
+Create shared object which can be used as input module file
+at another pisl invocation. In some environment, this option
+is not supported.
+.TP
+.B -windows
+This option has effect only in Win32 platform. When this is
+specified, pisl generates GUI application of Win32. Generated
+executable launches detatched from console and gets its own
+console when it accesses console first time.
+.TP
+.B -o \fIfilename
+Specify the name of executable file generated. If this option
+is not specified, linker determines the name of executable.
+.TP
+.B -s \fIfilename
+Specify the name of file that contains startup code (the code
+wich calls each initialization routines of linked modules.)
+This file will be the first modules passed to linker. Default
+is, if -o option is specified, the value of it prepended "s_"
+and appended ".c", "a.c" othewise.
+.TP
+.B -base \fIaddress
+Specify base address of output file. Format of address
+specification depends on your linker. Specifying base address
+is said to be useful in some environment.
+.TP
+.B -xm \fImodule
+Omit specified standard module from executable.
+.I Module
+shall be one of the following.
+.RS
+.PD 0
+.TP
+.B expand
+Hygienic macro feature with syntax-case. Some syntaxes
+will change its behavior slightly if this is omitted,
+though this should not affect normal programs.
+.TP
+.B stdmacro
+Standard marcros. In rhizome/pi, basic syntax kyewords
+such as define, lambda are impremented as macros, so
+omitting stdmacro disables usage of them. If
+application has no feature to evaluate arbitrary
+expression specified at run time, you can safely omit
+this.
+.TP
+.B debugger
+Debugging features.
+.TP
+.B stdproc
+Built in procedures implemented in scheme code at
+rhizome/pi. Consult to the source to see which procedure
+will be unusable if this is omitted :-)
+Expand and debugger will be omitted automatically
+if stdproc is omitted.
+.TP
+.B extcall
+Macros providing interface to functions in shared objects.
+If application need not to be able to define new external
+procedures, callbacks, buffer structures or constants at run
+time, you can safely omit this.
+.TP
+.B saccess
+Procedures used to expand macros defined trough macros which
+belongs to extcall. Saccess will be omitted automatically
+if expand is omitted and if saccess is omitted, extcall
+will be omitted automatically.
+.TP
+This option may be used multiple times.
+.PD
+.RE
+.TP
+.B -aux \fIstring
+Add
+.I string
+to the command line of linker. This may be used in
+the purpose of specifying a module wich is already in an object
+file. This option may be used multiple times.
+.SH Format of module-specifiler
+.TP
+.I module
+.I Module
+is the name you specified at
+.B -module
+option to
+.B pisc.
+File containing
+.I module
+is assumed to be named as
+.I module
+appended with ".c" suffix.
+.TP
+.I module:file
+.I Module
+is contained in the file named as
+.I file.
+.TP
+.I module:
+.I Module
+is already in object file. Use
+.B -aux
+option to specify the object file containing it.
+.SH ENVIRONMENT
+.TP
+RHIZOME_LIB
+Path name of directory which contains headers and libraries.
+.SH AUTHOR
+INUJIMA Masaru (qfwfq@kt.rim.or.jp).

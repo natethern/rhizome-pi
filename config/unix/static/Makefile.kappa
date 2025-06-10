@@ -1,0 +1,50 @@
+# @(#)$Header: /u/master/rhizome/config/unix/static/Makefile.kappa,v 1.3 2004/07/23 04:44:45 qfwfq Exp $
+# $Log: Makefile.kappa,v $
+# Revision 1.3  2004/07/23 04:44:45  qfwfq
+# change -m option in CFLAGS
+#
+# Revision 1.2  2004/04/09 05:12:09  qfwfq
+# ELF, W^X and pthread on OpenBSD.
+#
+# Revision 1.1  1999/06/15 07:14:39  qfwfq
+# Rearrange configuration files.
+#
+
+CDEBUGFLAGS=-O2
+#CDEBUGFLAGS=-g -DREPORT_STATS
+
+TESTEXE=a.out
+MODULE=rhizome
+
+SYMBOL=symb_23.o
+
+CC=gcc
+INCLDIR=../include
+CFLAGS=$(CDEBUGFLAGS) -mcpu=i686 -DRK_BIND_STATIC -I$(INCLDIR)
+#RANLIB=ranlib
+SYSLIBS=-lpthread -lm
+
+OBJS=cellhdlr.o $(SYMBOL) runengin.o read.o write.o number.o ldso.o
+LIBRARY=lib$(MODULE).a
+HDRS=$(INCLDIR)/rhiz_cnf.h $(INCLDIR)/rhizome.h
+
+all: $(LIBRARY)
+
+$(LIBRARY): $(OBJS)
+	$(AR) $(ARFLAGS) $@ $>
+	$(RANLIB) $@
+
+test: $(LIBRARY)
+	$(CC) $(CFLAGS) test.c ./$(LIBRARY) $(SYSLIBS)
+
+$(OBJS): $(HDRS)
+
+install: $(LIBRARY)
+	cd ../include; install -c -m 444 rhiz_cnf.h rhizome.h $(LIBDIR)
+	@set -x; install -c $(LIBRARY) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(LIBRARY); chmod 444 $(LIBDIR)/$(LIBRARY)
+
+clean:
+	rm -f *.o $(TESTEXE) core.*
+
+clobber: clean
+	rm -f $(LIBRARY)

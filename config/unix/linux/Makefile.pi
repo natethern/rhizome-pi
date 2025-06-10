@@ -1,0 +1,97 @@
+# @(#)$Header: /u/master/rhizome/config/unix/linux/Makefile.pi,v 1.4 2005/11/10 08:47:34 qfwfq Exp $
+# $Log: Makefile.pi,v $
+# Revision 1.4  2005/11/10 08:47:34  qfwfq
+# Option to distinguish pointers by function alignment.
+#
+# Revision 1.3  2005/08/30 07:49:25  qfwfq
+# New make target install_embed, libraries for embedding into other apps.
+#
+# Revision 1.2  2004/07/23 04:46:31  qfwfq
+# change -m option in CFLAGS
+#
+# Revision 1.1  2002/09/27 08:37:28  qfwfq
+# Add support of linux and lcc-win32.
+#
+
+BASEDIR = /usr/local
+BINDIR = $(BASEDIR)/bin
+LIBDIR = $(BASEDIR)/lib/rhizome
+SHLIBDIR = $(LIBDIR)
+
+CDEBUGFLAGS=-O2
+#CDEBUGFLAGS=-g -DREPORT_STATS
+
+EXESUFFIX=
+MODULE=rhzpi
+
+CC=gcc
+INCLDIR=../include
+CFLAGS=$(CDEBUGFLAGS) -mtune=i686 -falign-functions -DRK_BIND_STATIC -I$(INCLDIR)
+PIC_CFLAGS=-fpic $(CDEBUGFLAGS) -mtune=i686 -falign-functions -DRK_BIND_EXPORT -I$(INCLDIR)
+RANLIB=ranlib
+SYSLIBS=-lpthread -lm -ldl
+
+OBJS=eval.o prim_exp.o abbrev.o subr.o port.o numeric.o charactr.o reflect.o main.o helper.o dynload.o
+SOBJS=${OBJS:.o=.so}
+SHAREOBJ=$(MODULE).so
+LIBRARY=lib$(MODULE).a
+EMBEDLIB=lib$(MODULE)_e.a
+HDRS=$(INCLDIR)/rhiz_cnf.h $(INCLDIR)/rhizome.h rhiz_pi.h
+
+.SUFFIXES:
+.SUFFIXES: .o .so .c
+
+.c.so:; $(CC) $(PIC_CFLAGS) -o $@ -c $<
+
+all: all_targets
+	cd ../kappa; $(MAKE)
+	$(MAKE) pi_boot$(EXESUFFIX)
+	cd compiler; $(MAKE) SHLIBDIR=$(SHLIBDIR)
+
+embed: all embed_targets
+	cd ../kappa; $(MAKE) embed
+	cd compiler; $(MAKE) SHLIBDIR=$(SHLIBDIR) embed
+
+install_headers:
+	install -c -m 444 rhiz_pi.h $(LIBDIR)
+
+install: all install_headers
+	cd ../kappa; $(MAKE) LIBDIR=$(LIBDIR) install
+	@set -x; install -c $(LIBRARY) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(LIBRARY); chmod 444 $(LIBDIR)/$(LIBRARY)
+	cd compiler; $(MAKE) BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) SHLIBDIR=$(SHLIBDIR) install
+
+install_embed: embed install_headers
+	cd ../kappa; $(MAKE) LIBDIR=$(LIBDIR) install_embed
+	@set -x; install -c $(EMBEDLIB) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(EMBEDLIB); chmod 444 $(LIBDIR)/$(EMBEDLIB)
+	cd compiler; $(MAKE) BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) SHLIBDIR=$(SHLIBDIR) install_embed
+
+all_targets: $(SHAREOBJ) $(LIBRARY)
+
+embed_targets: $(EMBEDLIB)
+
+pi_boot$(EXESUFFIX): $(LIBRARY) boot.o
+	$(CC) $(CFLAGS) -o pi_boot boot.o ./$(LIBRARY) ../kappa/librhizome.a $(SYSLIBS)
+
+$(SHAREOBJ): $(SOBJS)
+	$(LD) -x -r -o $@ $^
+
+$(LIBRARY): $(OBJS)
+	$(AR) $(ARFLAGS) $@ $^
+	$(RANLIB) $@
+
+$(EMBEDLIB): $(SOBJS)
+	$(AR) $(ARFLAGS) $@ $^
+	$(RANLIB) $@
+
+$(OBJS) $(SOBJS) boot.o: $(HDRS)
+
+clean:
+	rm -f pi_boot$(EXESUFFIX) *.so *.o a.* core.*
+
+clobber: clean
+	rm -f $(LIBRARY) $(EMBEDLIB)
+
+distclean:
+	cd ../kappa; $(MAKE) clobber
+	$(MAKE) clobber
+	cd compiler; $(MAKE) clobber

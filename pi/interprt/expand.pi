@@ -1,0 +1,644 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: expand.pi,v 1.6 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: expand.pi,v $
+; Revision 1.6  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.5  1999/02/15 08:24:06  qfwfq
+; r5rs -- multiple values, dynamic-wind and eval
+;
+; Revision 1.4  1998/07/31 11:25:31  qfwfq
+; Just a minot fix not interesting
+;
+; Revision 1.3  1997/10/16 06:25:30  qfwfq
+; Release version 0.40
+;
+; Revision 1.2  1997/05/12 07:21:30  qfwfq
+; version 0.31 - some enhancements on error handling etc.
+;
+; Revision 1.1  1997/04/26 13:29:19  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+
+(define rp:resolve-syntax #f)
+(define rp:resolvant #f)
+(define rp:destruct #f)
+(define free-identifier=? #f)
+(define bound-identifier=? #f)
+(define syntax-object->datum #f)
+(define identifier? #f)
+(define implicit-identifier #f)
+(define generate-temporaries #f)
+(define syntax-error #f)
+(define rp:syntax-case #f)
+
+(let ((syntax-marker (rp:syntax-mark)))
+  (define (is-syntax? obj) (and (rp:pair? obj) (rp:eq? (rp:car obj) syntax-marker)))
+  (define syntax->transformer rp:cdr)
+  (define (syntax->expression sd) (rp:car (rp:cdr sd)))
+  (define (syntax->syntax-ops sd) (rp:cdr (rp:cdr sd)))
+  (define (make-syntax-obj exp ops) (rp:cons syntax-marker (rp:cons exp ops)))
+  (define (compose-syntax-ops op1 op2)
+    (cond
+      ((rp:null? op1) op2)
+      ((rp:null? op2) op1)
+      ((rp:eq? (rp:car (rp:car op2)) 'subst) (rp:append op1 op2))
+      (else
+       (let loop ((head (rp:car op1)) (rest (rp:cdr op1)))
+	 (if (rp:null? rest)
+	   (if (and (rp:eq? (rp:car head) 'mark) (rp:eq? (rp:cdr head) (rp:cdr (rp:car op2))))
+	     (rp:cdr op2)
+	     (rp:cons head op2))
+	   (rp:cons head (loop (rp:car rest) (rp:cdr rest))))))))
+  (define (mark-equiv? m1 m2)
+    (if (rp:null? m1) (rp:null? m2)
+      (and (rp:pair? m2) (rp:eq? (rp:car m1) (rp:car m2)) (mark-equiv? (rp:cdr m1) (rp:cdr m2)))))
+  (define (resolve-identifier id ops)
+    (if (rp:null? ops)
+      (if (rp:symbol? id) (rp:cons id '())
+	(resolve-identifier (syntax->expression id) (syntax->syntax-ops id)))
+      (let ((ip (resolve-identifier id (rp:cdr ops))) (op (rp:car ops)))
+	(if (rp:eq? (rp:car op) 'mark)
+	  (rp:cons (rp:car ip)
+	    (if (and (rp:pair? (rp:cdr ip)) (rp:eq? (rp:cdr op) (rp:car (rp:cdr ip))))
+	      (rp:cdr (rp:cdr ip)) (rp:cons (rp:cdr op) (rp:cdr ip))))
+	  (let ((name (rp:car ip)) (marks (rp:cdr ip)))
+	    (let loop ((substs (rp:cdr op)))
+	      (cond
+		((rp:null? substs) ip)
+		((and (rp:eq? (rp:car (rp:car substs)) name) (mark-equiv? (rp:cdr (rp:cdr (rp:car substs))) marks))
+		 (rp:cdr (rp:car substs)))
+		(else (loop (rp:cdr substs))))))))))
+  (define (add-subst id ops newv rest)
+    (let ((id-sig (resolve-identifier id ops)))
+      (rp:cons (rp:cons (rp:car id-sig) (rp:cons newv (rp:cdr id-sig))) rest)))
+  (define (prim-error form) (rp:error 105 form))
+  (define (assign-constructor name topdef?)
+    (lambda (exp syntax-ops env id-parser)
+      (let ((elts (destruct exp '#() '(pair (element) . (pair (element) . (pair (element) . (datum . ())))))))
+	(if elts
+	  (let ((var (rp:car (rp:cdr elts))) (val (rp:car (rp:cdr (rp:cdr elts)))))
+	    (if (is-id? var)
+	      (let ((var-name (rp:car (resolve-identifier var syntax-ops))))
+		(let ((syntax-role (rp:car (id-parser var-name var env))))
+		  (if (if topdef? (rp:not (rp:eq? syntax-role 'primitive)) (rp:eq? syntax-role 'variable))
+		    `(,name ,var-name (rp:resolvant ,(make-syntax-obj val syntax-ops) ,env))
+		    (raise-syntax-error var "invalid usage of syntax keyword"))))
+	      (prim-error exp)))
+	  (prim-error exp)))))
+  (define (local-syntax rec?)
+    (lambda (exp syntax-ops env id-parser)
+      (let ((elts
+	     (destruct exp '#()
+	       '(pair (element) . (pair (iterate . (pair (element) . (pair (element) . (datum . ())))) . (element))))))
+	(if elts
+	  (let ((keywords (rp:car (rp:cdr elts)))
+		(transformers (rp:car (rp:cdr (rp:cdr elts))))
+		(body (rp:car (rp:cdr (rp:cdr (rp:cdr elts))))))
+	    (let ((newvs (rp:map (lambda (x) (rp:gensym)) keywords)))
+	      (let ((nops
+		     (rp:cons
+		       (rp:cons 'subst
+			 (letrec ((nsub
+				   (lambda (newvs keywords)
+				     (if (rp:null? newvs) '()
+				       (let ((newv (rp:car newvs)) (keyword (rp:car keywords)))
+					 (if (is-id? keyword)
+					   (add-subst keyword syntax-ops newv (nsub (rp:cdr newvs) (rp:cdr keywords)))
+					   (prim-error exp)))))))
+			   (nsub newvs keywords)))
+		       syntax-ops)))
+		(let ((nenv
+		       (letrec ((add-macro
+				 (lambda (newvs transformers)
+				   (if (rp:null? newvs) env
+				     (let ((newv (rp:car newvs)) (transformer (rp:car transformers)))
+				       (rp:cons
+					 (rp:cons newv
+					   (rp:cons 'macro
+					     (rp:call-evaluator
+					       (rp:cons
+						 `(rp:resolvant
+						    ,(make-syntax-obj transformer (if rec? nops syntax-ops)) ,env)
+						 '())
+					       (rp:top-level-environment))))
+					 (add-macro (rp:cdr newvs) (rp:cdr transformers))))))))
+			 (add-macro newvs transformers))))
+		  `(rp:resolvant ,(make-syntax-obj `(rp:body ,@(make-syntax-obj body nops)) '()) ,nenv)))))
+	  (prim-error exp)))))
+  (define primitives #f)
+  (define (parse-identifier cur-name id env in-syntax?)
+    (if (rp:eq? cur-name (retrieve-datum id))
+      (let ((p (rp:assq cur-name primitives)))
+	(if p (rp:cons 'primitive (rp:cdr p))
+	  (let ((gval (rp:symbol-value cur-name #f)))
+	    (if (is-syntax? gval) (rp:cons 'macro (syntax->transformer gval)) '(variable)))))
+      (let ((c (rp:assq cur-name env)))
+	(if c (rp:cdr c) (if in-syntax? '(identifier) (raise-syntax-error id "local identifier out of its scope"))))))
+  (define (parse-identifier-in-closed-env cur-name id env prims macros)
+    (if (rp:eq? cur-name (retrieve-datum id))
+      (cond ((rp:memq cur-name prims) (rp:cons 'primitive (rp:cdr (rp:assq cur-name primitives))))
+	    ((rp:assq cur-name macros) => (lambda (p) (rp:cons 'macro (syntax->transformer (rp:cdr p)))))
+	    (else '(variable)))
+      (cond ((rp:assq cur-name env) => rp:cdr)
+	    (else (raise-syntax-error id "local identifier out of its scope")))))
+  (define (syntax-resolver id-parser)
+    (lambda (args)
+      (let ((exp (rp:car args)) (env (rp:car (rp:cdr args))))
+	(define (resolve exp syntax-ops env)
+	  (cond
+	    ((is-syntax? exp)
+	     (resolve (syntax->expression exp) (compose-syntax-ops syntax-ops (syntax->syntax-ops exp)) env))
+	    ((rp:symbol? exp)
+	     (let ((cur-name (rp:car (resolve-identifier exp syntax-ops))))
+	       (let ((syntax-role (id-parser cur-name exp env)))
+		 (if (rp:eq? (rp:car syntax-role) 'variable) cur-name
+		   (raise-syntax-error exp "invalid usage of syntax keyword")))))
+	    ((rp:pair? exp)
+	     (let ((a (rp:car exp)))
+	       (if (is-id? a)
+		 (let ((car-name (rp:car (resolve-identifier a syntax-ops))))
+		   (let ((syntax-type (id-parser car-name a env)))
+		     (case (rp:car syntax-type)
+		       ((primitive) ((rp:cdr syntax-type) exp syntax-ops env id-parser))
+		       ((macro)
+			(let ((mark (rp:cons 'mark (rp:gensym))))
+			  (resolve
+			    ((rp:cdr syntax-type) (make-syntax-obj exp (rp:cons mark syntax-ops)))
+			    (rp:cons mark '()) env)))
+		       (else (resolve-application-form exp syntax-ops env)))))
+		 (resolve-application-form exp syntax-ops env))))
+	    (else (retrieve-datum exp))))
+	(define (resolve-application-form exp syntax-ops env)
+	  (cond
+	    ((is-syntax? exp)
+	     (resolve-application-form
+	       (syntax->expression exp)
+	       (compose-syntax-ops syntax-ops (syntax->syntax-ops exp))
+	       env))
+	    ((rp:null? exp) '())
+	    ((rp:pair? exp)
+	     (rp:cons
+	       `(rp:resolvant ,(make-syntax-obj (rp:car exp) syntax-ops) ,env)
+	       (resolve-application-form (rp:cdr exp) syntax-ops env)))
+	    (else (rp:error 101))))
+	(resolve exp '() env))))
+  (define (destruct exp keys pattern)
+    (define (unify exp keys pattern ops rest)
+      (if (rp:not rest) rest
+	(let unify-entity ((exp exp) (ops ops))
+	  (if (is-syntax? exp)
+	    (unify-entity (syntax->expression exp) (compose-syntax-ops ops (syntax->syntax-ops exp)))
+	    (case (rp:car pattern)
+	      ((datum) (if (rp:equal? exp (rp:cdr pattern)) rest #f))
+	      ((key)
+	       (if (and (rp:symbol? exp)
+			(eq-as-free? (make-syntax-obj exp ops) (rp:vector-ref keys (rp:cdr pattern))))
+		 rest #f))
+	      ((element) (rp:cons (make-syntax-obj exp ops) rest))
+	      ((pair)
+	       (if (rp:pair? exp)
+		 (unify
+		   (rp:car exp) keys (rp:car (rp:cdr pattern)) ops
+		   (unify (rp:cdr exp) keys (rp:cdr (rp:cdr pattern)) ops rest))
+		 #f))
+	      ((vector)
+	       (if (rp:vector? exp) (unify (rp:vector->list exp) keys (rp:cdr pattern) ops rest) #f))
+	      ((iterate)
+	       (if (rp:null? exp) (unify-null (rp:cdr pattern) rest)
+		 (let ((l (unify-list exp keys (rp:cdr pattern) ops)))
+		   (if l (rp:append (rp:apply rp:map rp:list l) rest) l)))))))))
+    (define (unify-list exp keys pattern ops)
+      (cond
+	((is-syntax? exp)
+	 (unify-list (syntax->expression exp) keys pattern (compose-syntax-ops ops (syntax->syntax-ops exp))))
+	((rp:null? exp) '())
+	((rp:pair? exp)
+	 (let ((head (unify (rp:car exp) keys pattern ops '())))
+	   (if head
+	     (let ((tail (unify-list (rp:cdr exp) keys pattern ops)))
+	       (if tail (rp:cons head tail) tail))
+	     head)))
+	(else #f)))
+    (define (unify-null pattern rest)
+      (case (rp:car pattern)
+	((datum key) rest)
+	((element) (rp:cons '() rest))
+	((pair) (unify-null (rp:car (rp:cdr pattern)) (unify-null (rp:cdr (rp:cdr pattern)) rest)))
+	((vector) (unify-null (rp:cdr pattern) rest))
+	((iterate) (unify-null (rp:cdr pattern) rest))))
+    (unify exp keys pattern '() '()))
+  (define (eq-as-free? x y)
+    (and (rp:eq? (retrieve-datum x) (retrieve-datum y))
+	 (rp:eq? (rp:car (resolve-identifier x '())) (rp:car (resolve-identifier y '())))))
+  (define (eq-as-bound? x y)
+    (and
+      (rp:eq? (retrieve-datum x) (retrieve-datum y))
+      (let ((x-id (resolve-identifier x '())) (y-id (resolve-identifier y '())))
+	(and (rp:eq? (rp:car x-id) (rp:car y-id))
+	     (mark-equiv? (rp:cdr x-id) (rp:cdr y-id))))))
+  (define (retrieve-datum obj)
+    (cond
+      ((is-syntax? obj) (retrieve-datum (syntax->expression obj)))
+      ((rp:pair? obj)
+       (let ((a (retrieve-datum (rp:car obj))) (d (retrieve-datum (rp:cdr obj))))
+	 (if (and (rp:eq? a (rp:car obj)) (rp:eq? d (rp:cdr obj))) obj (rp:cons a d))))
+      ((rp:vector? obj)
+       (let ((len (rp:vector-length obj)))
+	 (let ((new (rp:make-vector len)))
+	   (do ((i 0 (rp:+ i 1))) ((rp:eqv? i len) new)
+	     (rp:vector-set! new i (retrieve-datum (rp:vector-ref obj i)))))))
+      (else obj)))
+  (define (is-id? obj) (or (rp:symbol? obj) (and (is-syntax? obj) (is-id? (syntax->expression obj)))))
+  (define (raise-syntax-error obj . mes)
+    (rp:error 109
+      (rp:list
+	'rp:syntax
+	(lambda (p obj message)
+	  (rp:display "Error in macro expansion: " p)
+	  (rp:write (retrieve-datum obj) p)
+	  (if message (begin (rp:newline p) (rp:display message p))))
+	obj
+	(if (rp:null? mes) #f (rp:apply rp:string-append mes)))))
+  (set! primitives
+    `((quote
+       ,@(lambda (exp syntax-ops env id-parser)
+	   (let ((elts (destruct exp '#() '(pair (element) . (pair (element) . (datum . ()))))))
+	     (if elts
+	       (let ((x (rp:car (rp:cdr elts)))) `(quote ,(retrieve-datum x)))
+	       (prim-error exp)))))
+      (lambda
+       ,@(lambda (exp syntax-ops env id-parser)
+           (let ((elts (destruct exp '#() '(pair (element) . (pair (element) . (element))))))
+	     (if elts
+	       (let ((formals (rp:car (rp:cdr elts))) (body (rp:car (rp:cdr (rp:cdr elts)))))
+		 (let convert
+		   ((formals formals)
+		    (result
+		      (lambda (formals env substs)
+			`(rp:lambda ,formals
+			   (rp:resolvant
+			     ,(make-syntax-obj
+				`(rp:body ,@(make-syntax-obj body (rp:cons (rp:cons 'subst substs) syntax-ops)))
+				'()) ,env)))))
+		   (cond
+		     ((destruct formals '#() '(datum . ())) (result '() env '()))
+		     ((is-id? formals)
+		      (let ((newv (rp:gensym)))
+			(result newv (rp:cons `(,newv . (variable)) env) (add-subst formals syntax-ops newv '()))))
+		     ((destruct formals '#() '(pair (element) . (element))) =>
+		      (lambda (elts)
+			(let ((formal (rp:car elts)) (rest (rp:car (rp:cdr elts))))
+			  (if (is-id? formal)
+			    (let ((newv (rp:gensym)))
+			      (convert rest
+				(lambda (formals env substs)
+				  (result (rp:cons newv formals) (rp:cons `(,newv . (variable)) env)
+				    (add-subst formal syntax-ops newv substs)))))
+			    (prim-error exp)))))
+		     (else (prim-error exp)))))
+	       (prim-error exp)))))
+      (if
+       ,@(lambda (exp syntax-ops env id-parser)
+	   (let ((elts
+		  (destruct exp '#()
+		    '(pair (element) . (pair (element) . (pair (element) . (pair (element) . (datum . ()))))))))
+	     (if elts
+	       (let ((test (rp:car (rp:cdr elts)))
+		     (then (rp:car (rp:cdr (rp:cdr elts))))
+		     (else (rp:car (rp:cdr (rp:cdr (rp:cdr elts))))))
+		 `(if (rp:resolvant ,(make-syntax-obj test syntax-ops) ,env)
+		      (rp:resolvant ,(make-syntax-obj then syntax-ops) ,env)
+		      (rp:resolvant ,(make-syntax-obj else syntax-ops) ,env)))
+	       (let ((elts
+		      (destruct exp '#() '(pair (element) . (pair (element) . (pair (element) . (datum . ())))))))
+		 (if elts
+		   (let ((test (rp:car (rp:cdr elts))) (then (rp:car (rp:cdr (rp:cdr elts)))))
+		     `(if (rp:resolvant ,(make-syntax-obj test syntax-ops) ,env)
+			  (rp:resolvant ,(make-syntax-obj then syntax-ops) ,env)))
+		   (prim-error exp)))))))
+      (set! ,@(assign-constructor 'set! #f))
+      (begin
+       ,@(lambda (exp syntax-ops env id-parser)
+	   (let ((elts (destruct exp '#() '(pair (element) . (iterate . (element))))))
+	     (if elts
+	       (let ((body (rp:car (rp:cdr elts))))
+		 `(begin ,@(rp:map (lambda (exp) `(rp:resolvant ,(make-syntax-obj exp syntax-ops) ,env)) body)))
+	       (prim-error exp)))))
+      (rp:define ,@(assign-constructor 'rp:define #t))
+      (rp:lambda-pattern
+       ,@(lambda (exp syntax-ops env id-parser)
+	   (let
+	     ((elts (destruct exp '#() '(pair (element)
+					    . (pair (iterate . (pair (element) . (element)))
+						  . (pair (element) . (datum . ())))))))
+	     (if elts
+	       (let ((vars (rp:car (rp:cdr elts)))
+		     (depths (retrieve-datum (rp:car (rp:cdr (rp:cdr elts)))))
+		     (body (rp:car (rp:cdr (rp:cdr (rp:cdr elts))))))
+		 (let ((newvs (rp:map (lambda (x) (rp:gensym)) vars)))
+		   `(rp:lambda ,newvs
+		      (rp:resolvant
+			,(make-syntax-obj body
+			   (rp:cons
+			     (rp:cons 'subst
+			       (let loop ((vars vars) (newvs newvs))
+				 (if (rp:null? vars) '()
+				   (add-subst (rp:car vars) syntax-ops (rp:car newvs)
+				     (loop (rp:cdr vars) (rp:cdr newvs))))))
+			     syntax-ops))
+			,(let loop ((depths depths) (newvs newvs))
+			   (if (rp:null? depths) env
+			     (rp:cons `(,(rp:car newvs) pattern . ,(rp:car depths))
+			       (loop (rp:cdr depths) (rp:cdr newvs)))))))))
+	       (prim-error exp)))))
+      (syntax
+       ,@(lambda (exp syntax-ops env id-parser)
+	   (define (union-vars a b)
+	     (define (mv? v l)
+	       (cond ((rp:null? l) #f)
+		     ((eq-as-free? v (rp:car (rp:car l))) #t)
+		     (else (mv? v (rp:cdr l)))))
+	     (let loop ((a a))
+	       (cond ((rp:null? a) b)
+		     ((mv? (rp:car (rp:car a)) b) (loop (rp:cdr a)))
+		     (else (rp:cons (rp:car a) (loop (rp:cdr a)))))))
+	   (define (do-cons desca descb)
+	     (case (rp:car descb)
+	       ((null) `(list ,desca))
+	       ((list) `(list ,desca ,@(rp:cdr descb)))
+	       ((append)
+		(if (rp:eq? (rp:car (rp:car (rp:cdr descb))) 'list)
+		  `(append (list ,desca ,@(rp:cdr (rp:car (rp:cdr descb)))) ,@(rp:cdr (rp:cdr descb)))
+		  `(append (list ,desca) ,@(rp:cdr descb))))
+	       (else `(append (list ,desca) ,descb))))
+	   (define (do-append desca descb)
+	     (case (rp:car descb)
+	       ((null) desca)
+	       ((append) `(append ,desca ,@(rp:cdr descb)))
+	       (else `(append ,desca ,descb))))
+	   (define (expand template idepth result)
+	     (cond ((destruct template '#(...) '(pair (key . 0) . (pair (key . 0) . (datum . ())))) =>
+		    (lambda (elts) (result `(identifier ,(make-syntax-obj '... '())) '())))
+		   ((destruct template '#(...) '(pair (element) . (pair (key . 0) . (element)))) =>
+		    (lambda (elts)
+		      (let ((a (rp:car elts)) (b (rp:car (rp:cdr elts))))
+			(expand b idepth
+			  (lambda (descb mapeeb)
+			    (expand a (rp:+ idepth 1)
+			      (lambda (desca mapeea)
+				(let ((mapvars
+				       (let loop ((vars mapeea))
+					 (cond ((rp:null? vars) '())
+					       ((rp:< idepth (rp:cdr (rp:car vars)))
+						(rp:cons (rp:car (rp:car vars)) (loop (rp:cdr vars))))
+					       (else (loop (rp:cdr vars)))))))
+				  (if (rp:null? mapvars) (raise-syntax-error a "not a iterated pattern")
+				    (result (do-append `(map ,desca ,mapvars) descb)
+					    (union-vars mapeea mapeeb)))))))))))
+		   ((destruct template '#() '(pair (element) . (element))) =>
+		    (lambda (elts)
+		      (let ((a (rp:car elts)) (b (rp:car (rp:cdr elts))))
+			(expand b idepth
+			  (lambda (descb mapeeb)
+			    (expand a idepth
+			      (lambda (desca mapeea)
+				(result (do-cons desca descb) (union-vars mapeea mapeeb)))))))))
+		   ((destruct template '#() '(vector . (element))) =>
+		    (lambda (elts)
+		      (let ((template (rp:car elts)))
+			(expand template idepth (lambda (desc mapee) (result `(vector ,desc) mapee))))))
+		   ((destruct template '#() '(datum . ())) => (lambda (elts) (result `(null) '())))
+		   ((is-id? template)
+		    (let ((syntax-role (parse-identifier (rp:car (resolve-identifier template '())) template env #t)))
+		      (if (rp:eq? (rp:car syntax-role) 'pattern)
+			(let ((vdepth (rp:cdr syntax-role)))
+			  (if (rp:< idepth vdepth) (raise-syntax-error template "must be iterated")
+			    (result `(pattern ,template) (rp:list (rp:cons template vdepth)))))
+			(result `(identifier ,template) '()))))
+		   (else (result `(literal ,template) '()))))
+	   (define (generate-expression desc maps)
+	     (case (rp:car desc)
+	       ((null) `(quote ()))
+	       ((list) `(rp:list ,@(rp:map (lambda (x) (generate-expression x maps)) (rp:cdr desc))))
+	       ((append)
+		(cond ((rp:null? (rp:cdr (rp:cdr desc))) (generate-expression (rp:car (rp:cdr desc)) maps))
+		      ((and (rp:eq? (rp:car (rp:car (rp:cdr desc))) 'list)
+			    (rp:null? (rp:cdr (rp:cdr (rp:car (rp:cdr desc))))))
+		       `(rp:cons ,(generate-expression (rp:car (rp:cdr (rp:car (rp:cdr desc)))) maps)
+				 ,(generate-expression `(append ,@(rp:cdr (rp:cdr desc))) maps)))
+		      (else `(rp:append ,@(rp:map (lambda (x) (generate-expression x maps)) (rp:cdr desc))))))
+	       ((vector)
+		(case (rp:car (rp:car (rp:cdr desc)))
+		  ((null) `(quote #()))
+		  ((list) `(rp:vector ,@(rp:map (lambda (x) (generate-expression x maps))
+						(rp:cdr (rp:car (rp:cdr desc))))))
+		  (else `(rp:apply rp:vector ,(generate-expression (rp:car (rp:cdr desc)) maps)))))
+	       ((literal) `(quote ,(retrieve-datum (rp:car (rp:cdr desc)))))
+	       ((identifier) `(quote ,(rp:car (rp:cdr desc))))
+	       ((pattern)
+		(let ((patv (rp:car (resolve-identifier (rp:car (rp:cdr desc)) '()))))
+		  (cond ((rp:assq patv maps) => rp:cdr)
+			(else patv))))
+	       ((map)
+		(let ((elt-desc (rp:car (rp:cdr desc))) (mapvars (rp:car (rp:cdr (rp:cdr desc)))))
+		  (if (rp:eq? (rp:car elt-desc) 'pattern) (generate-expression elt-desc maps)
+		    (let ((newvs (rp:map (lambda (x) (rp:gensym)) mapvars)))
+		      `(rp:map (rp:lambda ,newvs
+				 ,(generate-expression elt-desc
+				    (rp:append
+				      (rp:map (lambda (newv id) (rp:cons (rp:car (resolve-identifier id '())) newv))
+					newvs mapvars)
+				      maps)))
+			       ,@(rp:map (lambda (id) (generate-expression `(pattern ,id) maps)) mapvars))))))))
+	   (let ((elts (destruct exp '#() '(pair (element) . (pair (element) . (datum . ()))))))
+	     (if elts
+	       (expand (make-syntax-obj (rp:car (rp:cdr elts)) syntax-ops) 0
+		       (lambda (desc mapee) (generate-expression desc '())))
+	       (prim-error exp)))))
+      (let-syntax ,@(local-syntax #f))
+      (letrec-syntax ,@(local-syntax #t))
+      (rp:body
+       ,@(lambda (exp syntax-ops env id-parser)
+	   (define (build-result bodies vars vals keys trns)
+	     (if (and (rp:null? vars) (rp:null? keys))
+	       `(begin ,@(rp:map (lambda (exp) `(rp:resolvant ,exp ,env)) bodies))
+	       (let ((newvs (rp:map (lambda (x) (rp:gensym)) vars)) (newks (rp:map (lambda (x) (rp:gensym)) keys)))
+		 (let mkops ((subst '()) (ovs (rp:append vars keys)) (nvs (rp:append newvs newks)))
+		   (if (rp:null? ovs)
+		     (let ((newop (rp:cons (rp:cons 'subst subst) '())))
+		       (let menv ((nenv env) (trns trns) (newks newks))
+			 (if (rp:null? trns)
+			   (if (rp:null? vars)
+			     `(begin
+				,@(rp:map (lambda (exp) `(rp:resolvant ,(make-syntax-obj exp newop) ,nenv)) bodies))
+			     (let venv ((nenv nenv) (ll '()) (al '()) (vl '()) (vals vals) (newvs newvs))
+			       (if (rp:null? vals)
+				 `((rp:lambda ,ll
+				     ,@(rp:map
+					 (lambda (var val)
+					   `(set! ,var (rp:resolvant ,(make-syntax-obj val newop) ,nenv)))
+					 ll al)
+				     ,@(rp:map (lambda (exp) `(rp:resolvant ,(make-syntax-obj exp newop) ,nenv))
+					 bodies)) ,@vl)
+				 (venv
+				   `((,(rp:car newvs) . (variable)) ,@nenv)
+				   `(,(rp:car newvs) ,@ll) `(,(rp:car vals) ,@al) `(,(rp:cons 'rp:void '()) ,@vl)
+				   (rp:cdr vals) (rp:cdr newvs)))))
+			   (menv
+			     `((,(rp:car newks) macro .
+				,(rp:call-evaluator `((rp:resolvant ,(make-syntax-obj (rp:car trns) newop) ,env))
+				   (rp:top-level-environment))) ,@nenv)
+			     (rp:cdr trns) (rp:cdr newks)))))
+		     (mkops (add-subst (rp:car ovs) '() (rp:car nvs) subst) (rp:cdr ovs) (rp:cdr nvs)))))))
+	   (let ((elts (destruct exp '#() '(pair (element) . (iterate . (element))))))
+	     (if elts
+	       (let ((body (rp:car (rp:cdr elts))))
+		 (let getdefs ((bodies (rp:map (lambda (exp) (make-syntax-obj exp syntax-ops)) body))
+			       (vars '()) (vals '()) (keys '()) (trns '()))
+		   (if (rp:null? bodies) (prim-error exp)
+		     (let expn ((exp (rp:car bodies)))
+		       (cond
+			 ((destruct exp '#(define)
+			    '(pair (key . 0) . (pair (pair (element) . (element)) . (iterate . (element))))) =>
+			  (lambda (elts)
+			    (let ((fn (rp:car elts)) (ll (rp:car (rp:cdr elts))) (b (rp:car (rp:cdr (rp:cdr elts)))))
+			      (if (is-id? fn)
+				(getdefs (rp:cdr bodies)
+				  (rp:cons fn vars)
+				  (rp:cons (make-syntax-obj `(lambda ,ll ,@b) '()) vals)
+				  keys trns)
+				(prim-error exp)))))
+			 ((destruct exp '#(define)
+			    '(pair (key . 0) . (pair (element) . (pair (element) . (datum . ()))))) =>
+			  (lambda (elts)
+			    (let ((var (rp:car elts)) (val (rp:car (rp:cdr elts))))
+			      (if (is-id? var)
+				(getdefs (rp:cdr bodies) (rp:cons var vars) (rp:cons val vals) keys trns)
+				(prim-error exp)))))
+			 ((destruct exp '#(define-syntax)
+			    '(pair (key . 0) . (pair (element) . (pair (element) . (datum . ()))))) =>
+			  (lambda (elts)
+			    (let ((key (rp:car elts)) (trn (rp:car (rp:cdr elts))))
+			      (if (is-id? key)
+				(getdefs (rp:cdr bodies) vars vals (rp:cons key keys) (rp:cons trn trns))
+				(prim-error exp)))))
+			 ((destruct exp '#(begin) '(pair (key . 0) . (iterate . (element)))) =>
+			  (lambda (elts)
+			    (getdefs (rp:append (rp:car elts) (rp:cdr bodies)) vars vals keys trns)))
+			 ((destruct exp '#() '(pair (element) . (element))) =>
+			  (lambda (elts)
+			    (let ((a (rp:car elts)))
+			      (if (is-id? a)
+				(let ((car-name (rp:car (resolve-identifier a '()))))
+				  (let ((syntax-type (id-parser car-name a env)))
+				    (if (rp:eq? (rp:car syntax-type) 'macro)
+				      (let ((ml (rp:cons (rp:cons 'mark (rp:gensym)) '())))
+					(expn (make-syntax-obj ((rp:cdr syntax-type) (make-syntax-obj exp ml)) ml)))
+				      (build-result bodies vars vals keys trns))))
+				(build-result bodies vars vals keys trns)))))
+			 (else (build-result bodies vars vals keys trns)))))))
+	       (prim-error exp)))))))
+  (set! free-identifier=? eq-as-free?)
+  (set! bound-identifier=? eq-as-bound?)
+  (set! syntax-object->datum retrieve-datum)
+  (set! identifier? is-id?)
+  (set! implicit-identifier
+    (lambda (id sym)
+      (let loop ((id id) (ops '()))
+	(if (is-syntax? id)
+	  (loop (syntax->expression id) (compose-syntax-ops ops (syntax->syntax-ops id)))
+	  (make-syntax-obj sym ops)))))
+  (set! generate-temporaries
+    (lambda (l) (rp:map (lambda (x) (make-syntax-obj (rp:gensym) '())) l)))
+  (set! syntax-error raise-syntax-error)
+  (set! rp:syntax-case
+    (lambda (x)
+      (define (build-destructure pattern keys idepth rvars result)
+	(cond
+	  ((is-id? pattern)
+	   (let loop ((keys keys) (index 0))
+	     (if (rp:null? keys)
+	       (result '(element) `((,pattern . ,idepth) ,@rvars))
+	       (if (eq-as-bound? pattern (rp:car keys))
+		 (result `(key . ,index) rvars)
+		 (loop (rp:cdr keys) (rp:+ index 1))))))
+	  ((destruct pattern '#(...) '(pair (element) . (pair (key . 0) . (datum . ())))) =>
+	   (lambda (elts)
+	     (let ((pattern (rp:car elts)))
+	       (build-destructure pattern keys (rp:+ idepth 1) rvars
+		 (lambda (pattern vars) (result `(iterate . ,pattern) vars))))))
+	  ((destruct pattern '#() '(pair (element) . (element))) =>
+	   (lambda (elts)
+	     (let ((a (rp:car elts)) (d (rp:car (rp:cdr elts))))
+	       (build-destructure d keys idepth rvars
+		 (lambda (dpat vars)
+		   (build-destructure a keys idepth vars
+		     (lambda (apat vars) (result `(pair ,apat . ,dpat) vars))))))))
+	  ((destruct pattern '#() '(vector . (element))) =>
+	   (lambda (elts)
+	     (let ((pattern (rp:car elts)))
+	       (build-destructure pattern keys idepth rvars
+		 (lambda (pattern vars) (result `(vector . ,pattern) vars))))))
+	  (else (result `(datum . ,(retrieve-datum pattern)) rvars))))
+      (define (process-clause exp keys clause alt)
+	(cond
+	  ((destruct clause '#() '(pair (element) . (pair (element) . (datum . ())))) =>
+	   (lambda (elts)
+	     (let ((pattern (rp:car elts)) (template (rp:car (rp:cdr elts))))
+	       (build-destructure pattern keys 0 '()
+		 (lambda (pattern vars)
+		   `((lambda (exp)
+		       ((lambda (elts)
+			  (if elts (rp:apply (rp:lambda-pattern ,vars ,template) elts) ,alt))
+			(rp:destruct exp '#(,@keys) ',pattern)))
+		     ,exp))))))
+	  ((destruct clause '#() '(pair (element) . (pair (element) . (pair (element) . (datum . ()))))) =>
+	   (lambda (elts)
+	     (let ((pattern (rp:car elts))
+		   (fender (rp:car (rp:cdr elts)))
+		   (template (rp:car (rp:cdr (rp:cdr elts)))))
+	       (build-destructure pattern keys 0 '()
+		 (lambda (pattern vars)
+		   `((lambda (exp)
+		       ((lambda (alt)
+			  ((lambda (elts)
+			     (if elts
+			       (rp:apply (rp:lambda-pattern ,vars (if ,fender ,template (alt))) elts)
+			       (alt)))
+			   (rp:destruct exp '#(,@keys) ',pattern)))
+			(lambda () ,alt)))
+		     ,exp))))))
+	  (else (raise-syntax-error clause "illegal clause in syntax-case"))))
+      (cond
+	((destruct x '#() '(pair (element) . (pair (element) . (pair (element) . (datum . ()))))) =>
+	 (lambda (elts) `(syntax-error ,(rp:car (rp:cdr elts)))))
+	((destruct x '#()
+	   '(pair (element) . (pair (element) . (pair (iterate . (element)) . (pair (element) . (element)))))) =>
+	 (lambda (elts)
+	   (let ((exp (rp:car (rp:cdr elts)))
+		 (keys (rp:car (rp:cdr (rp:cdr elts))))
+		 (clause (rp:car (rp:cdr (rp:cdr (rp:cdr elts)))))
+		 (rest (rp:car (rp:cdr (rp:cdr (rp:cdr (rp:cdr elts)))))))
+	     (process-clause exp keys clause `(syntax-case exp ,keys ,@rest)))))
+	(else (raise-syntax-error x)))))
+  (set! rp:destruct destruct)
+  (set! rp:resolve-syntax (syntax-resolver (lambda (cur-name id env) (parse-identifier cur-name id env #f))))
+  (set! rp:closed-resolver
+    (lambda (prims macros)
+      (syntax-resolver (lambda (cur-name id env) (parse-identifier-in-closed-env cur-name id env prims macros)))))
+  (set! rp:resolvant (rp:derivation rp:resolve-syntax))
+  (set! rp:expand-syntax (lambda (exp) `(rp:resolvant ,(make-syntax-obj exp '((mark . input-data))) ()))))

@@ -1,0 +1,46 @@
+# @(#)$Header: /u/master/rhizome/config/win32/lcc/Makefile.kappa,v 1.1 2002/09/27 08:52:34 qfwfq Exp $
+# $Log: Makefile.kappa,v $
+# Revision 1.1  2002/09/27 08:52:34  qfwfq
+# Add support of linux and lcc-win32.
+#
+
+SYMBOL=symb_23.obj
+INCLDIR=..\include
+RM=del /f
+
+CDEBUGFLAGS=-O
+#CDEBUGFLAGS=-g2 -DREPORT_STATS
+CC=lcc
+CFLAGS=$(CDEBUGFLAGS) -nw -DWIN32 -DRK_BIND_EXPORT -I$(INCLDIR)
+LD=lcclnk
+LDFLAGS=
+AR=lcclib
+CHKPT=
+
+OBJS=cellhdlr.obj $(SYMBOL) runengin.obj read.obj write.obj number.obj ldso.obj $(CHKPT)
+LIBRARY=rhizome.lib
+HDRS=$(INCLDIR)\rhiz_cnf.h $(INCLDIR)\rhizome.h
+
+.c.obj:
+	$(CC) $(CFLAGS) -c $<
+
+all: $(LIBRARY)
+
+$(OBJS): $(HDRS)
+
+$(LIBRARY): $(OBJS)
+	$(AR) /out:$(LIBRARY) $(OBJS)
+
+test.exe: test.obj $(LIBRARY)
+	$(LD) $(LDFLAGS) -o test.exe test.obj .\$(LIBRARY)
+
+install: $(LIBRARY)
+	copy $(LIBRARY) $(LIBDIR)
+	copy ..\include\rhiz_cnf.h $(LIBDIR)
+	copy ..\include\rhizome.h $(LIBDIR)
+
+clean:
+	-$(RM) *.obj test.exe
+
+clobber: clean
+	-$(RM) $(LIBRARY)

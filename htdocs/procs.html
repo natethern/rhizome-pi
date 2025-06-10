@@ -1,0 +1,578 @@
+<html>
+<!-- $Id: procs.html,v 1.6 1999/02/15 08:59:01 qfwfq Exp $ -->
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-2022-JP">
+<title>rhizome/pi procedures</title>
+</head>
+
+<body>
+<ul>
+  <li><a href="#Filename">ファイル名の解釈</a>
+  <li><a href="#General">一般</a>
+  <li><a href="#Macro">マクロ</a>
+  <li><a href="#System">システム環境</a>
+  <li><a href="#Error">エラー</a>
+  <li><a href="#Signal">シグナル</a>
+  <li><a href="#Port">ポート</a>
+  <li><a href="#Debugger">デバッガサポート</a>
+  <li><a href="#Bitwise">ビット毎の演算と浮動小数点数</a>
+  <li><a href="#Channel">チャネル</a>
+  <li><a href="#Object">オブジェクト</a>
+  <li><a href="extfunc.txt">外部関数とのインターフェース</a>
+  <li><a href="wwlib.txt">Win32 API ラッパライブラリ</a>
+</ul>
+
+<a name="Filename"><h2>ファイル名の解釈</h2></a>
+  ファイル名を引数としてとり、それに対して入出力を行う手続きにおいて、
+  そのファイル名として与えられた文字列に対して以下のような解釈を行う。
+<table>
+  <tr>
+    <td valign=top><code>"pathname"</code></td>
+    <td>文字列の第一要素が <code>#\&lt; #\&gt; #\|</code> 以外のとき<br>
+	文字列全体をファイルのパス名として解釈する。
+	出力手続きでファイルが既に存在した場合の動作について
+	は規定しない。</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"&lt;pathname"</code></td>
+    <td>文字列の第一要素が <code>#\&lt;</code> のとき<br>
+	入力手続きに対して有効。文字列の２文字目以降を
+	ファイルのパス名として解釈する。</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"&gt;pathname"</code></td>
+    <td>文字列の第一要素が <code>#\&gt;</code> で第二要素が
+	<code>#\&gt;</code> 以外のとき<br>
+	出力手続きに対して有効。文字列の２文字目以降を
+	ファイルのパス名として解釈する。ファイルが既に存在
+	した場合はそれに上書きする。</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"&gt;&gt;pathname"</code></td>
+    <td>文字列の第一要素が <code>#\&gt;</code> で第二要素が
+	<code>#\&gt;</code> のとき<br>
+	出力手続きに対して有効。文字列の３文字目以降を
+	ファイルのパス名として解釈する。ファイルが既に存在
+	した場合はそれに追加する。</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"|command"</code></td>
+    <td>文字列の第一要素が <code>#\|</code> のとき<br>
+	文字列の２文字目以降をコマンド文字列として解釈する。
+	入力手続きに対してはその標準出力を読み込む。出力手続き
+	に対してはその標準入力に書き込む。コマンドの終了
+	ステータスは <code>rp:file-status</code> (下記参照)で取得できる。</td>
+  </tr>
+</table>
+<p>
+  入力のための指定か出力のための指定かは手続きによって決まっているため、
+  パイプ記号は常に文字列の先頭に置かれる。この点で perl での指定方法と異なる
+  ので注意。
+
+<a name="General"><h2>一般</h2></a>
+<dl>
+  <dt><code>(gensym)</code> procedure
+  <dd>(intern されない)symbol を生成する。
+  <dt><code>(rp:symbol-value <var>symbol</var> [<var>default-value</var>])</code> procedure
+  <dd>シンボル <code><var>symbol</var></code> の(トップレベルの環境での)値。
+       <code><var>symbol</var></code> が未束縛の場合は
+       <code><var>default-value</code></var>が返される。
+       これが指定されていない時の未束縛の場合の戻り値は規定しない。
+      これは他の lisp 方言でよくみられる属性リストを実現するなどの利用を
+      想定したものである。プログラム上の変数としての使用と
+      <code>rp:symbol-value</code> での値の使用を混ぜることは推奨しない。
+  <dt><code>(rp:symbol-value-set! <var>symbol</var> <var>value</var>)</code> procedure
+  <dd>シンボル <code><var>symbol</var></code> の(トップレベルの環境での)値に
+      <code><var>value</var></code> をセットする。
+      <code>rp:symbol-value</code> の注意を参照のこと。
+  <dt><code>(rp:symbol-bound? <var>symbol</var>)</code> procedure
+  <dd>シンボル <code><var>symbol</var></code> がトップレベルの環境で値を
+      持つなら <code>#t</code> を、そうでないなら <code>#f</code> を返す。
+  <dt><code>(rp:symbol-aux-datum-set! <var>symbol</var> <var>obj</var>)</code> procedure
+  <dd>シンボル <code><var>symbol</var></code> に任意の値
+      <code><var>obj</var></code> を関連付ける。これで関連付けられた値は
+      <code>rp:symbol-aux-datum</code> で取り出すことができる。
+  <dt><code>(rp:symbol-aux-datum <var>symbol</var> [<var>default-value</var>])</code> procedure
+  <dd>シンボル <code><var>symbol</var></code> に
+      <code>rp:symbol-aux-datum-set!</code> で関連付けられた値を取り出す。
+      そのような値が無い場合は <code><var>default-value</code></var>
+      が指定されていればそれが返される。
+  <dt><code>(rp:symbol-aux-datum-assigned? <var>symbol</var>)</code> procedure
+  <dd>シンボル <code><var>symbol</var></code> に対して
+      <code>rp:symbol-aux-datum-set!</code> が適用されていれば <code>#t</code>
+      を、一度も適用されていなければ <code>#f</code> を返す。
+  <dt><code>(break [<var>prompt</var>])</code> procedure
+  <dd>read-eval-print ループを実行する。<code><var>prompt</var></code>
+      は文字列、省略時 "break> "
+  <dt><code>(continue)</code> procedure
+  <dd>最も内側の break ループから抜ける。通常のトップレベルではこれは pi
+      の終了を意味する。
+      break ループの実行中でなければ変数 <code>continue</code> は未定義である。
+  <dt><code>(rp:object->string <var>object</var>)</code> procedure
+  <dd><code><var>object</var></code> の外部表現を文字列として返す。
+  <dt><code>(rp:string->object <var>string</var>)</code> procedure
+  <dd><code><var>string</var></code> を外部表現として持つオブジェクトを返す。
+  <dt><code>(rp:locally ((<var>var</var> <var>val</var>) ...) (<var>cleanup</var> ...) <var>body</var> ...)</code> syntax
+  <dd>let と同様に <code><var>var</var></code> に <code><var>val</var></code>
+      を評価した値を束縛して <code><var>body</var></code> の式を順に評価する。
+      <code><var>body</var></code> の最後の式が値を返した後、あるいは
+      <code><var>body</var></code> の式の評価中にエラーによって
+      抜ける時、<code><var>cleanup</var></code> の式が
+      <code><var>var</var></code> の束縛のスコープ内で順に評価される。
+      <code><var>body</var></code>
+      の式の評価がすべて値を返した場合、その最後の値が全体の式の値となる。
+  <dt><code>(rp:char-dbcs-lead-byte? <var>char</var>)</code> procedure
+  <dd><code><var>char</var></code> が2バイト文字の最初のバイトのとき真を返す。
+      判定基準はOSやユーザー環境の設定によって変化する。
+      もちろんこの手続きが意味をもつのはすべての複数バイト文字がちょうど
+      2バイトからなるような文字コードを使用している場合のみである。
+  <dt><code>(rp:dbg-set-flag <var>symbol</var> <var>value</var>)</code> procedure
+  <dd><code><var>symbol</var></code> に対して <code><var>values</var></code>
+      を関連付ける。関連付けられた値は <code>rp:dbg-debugging?</code>
+      で取り出すことができる。これはグローバルなフラグによってマクロ展開や
+      プログラムの実行を制御する用途を想定している。
+  <dt><code>(rp:dbg-debugging? <var>symbol</var>)</code> procedure
+  <dd><code>rp:dbg-set-flag</code> によって <code><var>symbol</var></code>
+      に関連付けられた値を取り出す。
+      関連付けがない場合のデフォルトは <code>#f</code> になる。
+</dl>
+
+<a name="Macro"><h2>マクロ</h2></a>
+<dl>
+  <dt><code>(rp:eval-in-compiler-environment <var>expression</var>)</code> syntax
+  <dd>インタプリタでは expression が単に評価される。
+      トップレベルに置かれた場合、<code><var>expression</var></code>
+      はコンパイル時に評価され、その副作用はコンパイル過程に影響を与える。
+  <dt><code>(rp:load-into-compiler-environment <var>file</var>)</code> syntax
+  <dd>インタプリタでは <code>(load <var>file</var>)</code> と同じ。
+      トップレベルに置かれた場合、コンパイル時には file がコンパイラの環境に
+      ロードされる。したがってその内容は出力コードに含まれるのではなく、
+      コンパイルそのものの過程に影響を与える。
+  <dt><code>(rp:use-macro-package <var>file</var>)</code> syntax
+  <dd><code><var>file</var></code> をいくつかのディレクトリから検索し、
+      みつかったものを <code>rp:load-into-compiler-environment</code>
+      と同様にロードする。検索は以下の順で行われる。
+      <ol><li>カレントディレクトリ
+	  <li>(pisc の場合) <code>-mpath</code>
+	      オプションで指定したディレクトリ
+	  <li>環境変数 <code>RHIZOME_MACRO_PATH</code>
+	      でリストされたディレクトリ
+	  <li>環境変数 <code>RHIZOME_LIB</code>
+	      で指定されたディレクトリ
+      </ol>
+      さらにこのサーチパスは変数 <code>rp:*macro-search-list*</code>
+      に入っているので、この変数の値を変化させることで任意に変更できる。
+</dl>
+
+<a name="System"><h2>システム環境</h2></a>
+<dl>
+  <dt><code>(exit [<var>exit-code</var>])</code> procedure
+  <dd>終了コード <code><var>exit-code</var></code> (省略時 0)で pi を終了する。
+  <dt><code>(system <var>string</var>)</code> procedure
+  <dd>標準ライブラリの <code>system()</code> を実行し、その値を返す。
+  <dt><code>(getenv <var>string</var>)</code> procedure
+  <dd>環境変数 <code><var>string</var></code> の値を返す。
+  <dt><code>(file-exists? <var>string</var>)</code> procedure
+  <dd><code><var>string</var></code> をその名前とするファイルが存在するとき
+      #t,存在しないとき #f を返す。
+  <dt><code>*invocation-arg*</code> global variable
+  <dd>プログラム名及びその引数からなるリスト。
+  <dt><code>(rp:command-line-arguments)</code> procedure
+  <dd>起動時のコマンドラインを文字列からなるベクタとして返す。
+  <dt><code>(rp:time)</code> procedure
+  <dd><code>#(<var>real</var> <var>user</var> <var>sys</var>)</code>
+      の形で起動時からの実行時間情報を返す。
+  <dt><code>(rp:errno)</code> procedure
+  <dd>標準ライブラリの <code>errno</code> の値。
+  <dt><code>(rp:strerror <var>errono</var>)</code> procedure
+  <dd>標準ライブラリの呼び出し <code>strerror(<var>errno</var>)</code>
+      で得られる文字列。
+  <dt><code>(rp:load-compiled-module <var>module</var>)</code> procedure
+  <dd>pisl の -loadable オプションで作成した<code><var>module</var></code>
+      をロードする。
+  <dt><code>(rp:identify-platform)</code> procedure
+  <dd>プラットホームを識別するリストを返す。
+      返されるリストは少なくとも3個の要素を持ち、第一要素はOSの種類、
+      第二要素はCPUアーキテクチャを表す。
+      また第三要素はOSのバージョンを表す文字列となる。
+</dl>
+
+<a name="Error"><h2>エラー</h2></a>
+<dl>
+  <dt><code>(rp:catch-error <var>procedure</var> <var>expression</var>)</code> syntax
+  <dd>エラーを捕獲する。<br>
+      まず <code><var>procedure</var></code> を評価する。
+      これは２引数の手続きにならなけばならない。次に
+      <code><var>expression</var></code> を評価し、その値を自身の値とする。
+      ただし <code><var>expression</var></code>
+      の評価中にエラーが発生した場合、<code><var>procedure</var></code> が
+<pre>
+	(<var>procedure</var> <var>error-code</var> <var>obj</var>)
+</pre>
+      の形で呼び出され、その返す値が元の式の値とされる。
+      このエラー処理環境は continuation の一部をなすと考えられる。
+  <dt><code>(rp:call-with-error-handler <var>error-proc</var> <var>thunk</var>)</code> procedure
+  <dd><code>(rp:catch-error <var>procedure</var> <var>expression</var>)</code>
+      は以下の式に展開するマクロとして実現されている。
+<pre>
+	(rp:call-with-error-handler <var>error-proc</var> (lambda () <var>expression</var>))
+</pre>
+  <dt><code>(rp:error-message <var>error-code</var> <var>obj</var>)</code> procedure
+  <dd>エラーメッセージを文字列として返す。
+  <dt><code>(rp:print-error-message <var>error-code</var> <var>obj</var> [<var>port</var>])</code> procedure
+  <dd><code><var>port</var></code> (省略時 <code>current-output-port</code>)
+      にエラーメッセージを出力する。
+  <dt><code>(rp:exception (<var>type</var> <var>arg</var> ...) <var>message-proc</var>)</code> syntax
+  <dd>この式を評価した結果は <code>(<var>arg</var> ...)</code>
+      に対応した引数をとる手続きになる。その手続きを呼ぶと
+      <code>(<var>type</var> <var>arg</var> ...)</code>
+      の型の例外が発生する。<br>
+      <code><var>type</var></code> はシンボルでなければならない。
+      <code><var>message-proc</var></code> は <code>(<var>arg</var> ...)</code>
+      が引数に束縛された環境で評価され、１引数の手続きにならなければならない。
+      エラーメッセージが必要になった場合、この手続きが出力ポートを引数として
+      呼ばれるので、そのポートにメッセージを出力する。
+  <dt><code>(rp:displatch-exception <var>error-code</var> <var>obj</var> ((<var>error-type</var> <var>arg</var> ...) <var>action</var> ...) ...)</code> syntax
+  <dd><code><var>error-code</var></code> と <code><var>obj</var></code> は
+      <code>rp:call-with-error-handler</code>
+      を介して得られるエラー処理手続きへの引数である。
+      エラーに対応する型を持つ節が選択され、その節の
+      <code><var>action</var></code> が <code>(<var>arg</var> ...)</code>
+      が束縛された状態で実行される。 <code><var>action</var></code>
+      の最後の式の値がこの式の値となる。<br>
+      <code>(default <var>error-code</var> <var>obj</var>)</code>
+      はすべての型のエラーにマッチする。<br>
+      マッチする節がなければもとのエラーがあらためて発生する。<br>
+      処理系定義のエラー型は以下の通りだが、
+      これらの大部分はプログラム中で使用する状況はあまり考えられない。
+<table>
+  <tr>
+    <td><code>(rp:os-error <var>errno</var>)</code></td>
+    <td>ファンクションコールのエラー</td>
+  </tr>
+  <tr>
+    <td><code>(rp:read-syntax-error <var>message</var>)</code></td>
+    <td><code>(read)</code> でのシンタックスエラー</td>
+  </tr>
+  <tr>
+    <td><code>(rp:eof-error)</code></td>
+    <td>予期しない eof</td>
+  </tr>
+  <tr>
+    <td><code>(rp:storage-error)</code></td>
+    <td>メモリアロケーションの失敗</td>
+  </tr>
+  <tr>
+    <td><code>(rp:overflow-error)</code></td>
+    <td>数値演算でのオーバーフロー</td>
+  </tr>
+  <tr>
+    <td><code>(rp:div0-error)</code></td>
+    <td>ゼロでの除算</td>
+  </tr>
+  <tr>
+    <td><code>(rp:ldso-error <var>message</var>)</code></td>
+    <td>外部関数に関係したエラー</td>
+  </tr>
+  <tr>
+    <td><code>(rp:eval-error <var>obj</var>)</code></td>
+    <td>評価できないオブジェクト</td>
+  </tr>
+  <tr>
+    <td><code>(rp:var-unbound-error <var>var</var>)</code></td>
+    <td>未束縛の変数</td>
+  </tr>
+  <tr>
+    <td><code>(rp:apply-error <var>obj</var>)</code></td>
+    <td>手続きでないものの適用</td>
+  </tr>
+  <tr>
+    <td><code>(rp:arg-error)</code></td>
+    <td>不正な引数</td>
+  </tr>
+  <tr>
+    <td><code>(rp:primitive-error <var>exp</var>)</code></td>
+    <td>基本構文の誤り</td>
+  </tr>
+  <tr>
+    <td><code>(rp:excess-formal-error)</code></td>
+    <td>仮引数リストが長すぎる</td>
+  </tr>
+  <tr>
+    <td><code>(rp:arg-count-error)</code></td>
+    <td>引数の数の誤り</td>
+  </tr>
+  <tr>
+    <td><code>(rp:define-error)</code></td>
+    <td>不正な場所の define 文</td>
+  </tr>
+  <tr>
+    <td><code>(rp:exception-error <var>data</var>)</code></td>
+    <td><code>rp:exception</code> による例外</td>
+  </tr>
+  <tr>
+    <td><code>(rp:map-error)</code></td>
+    <td><code>map</code> の引数の長さが異なる</td>
+  </tr>
+  <tr>
+    <td><code>(rp:eval-procedure-error)</code></td>
+    <td>evaluator の異常な動作</td>
+  </tr>
+  <tr>
+    <td><code>(rp:busy-port-error)</code></td>
+    <td>ビジー状態のポートの使用</td>
+  </tr>
+  <tr>
+    <td><code>(rp:port-procedure-error)</code></td>
+    <td>ポート手続きの異常な動作</td>
+  </tr>
+  <tr>
+    <td><code>(rp:read-only-var-error <var>var</var>)</code></td>
+    <td>変数の値は変更できない</td>
+  </tr>
+</table>
+      <code>rp:exception-error</code>
+      型の節はすべての例外にマッチしてしまうことに注意。
+  <dt><code>(rp:try-except <var>expression</var> ((<var>error-type</var> <var>arg</var> ...) <var>action</var> ...) ...)</code> syntax
+  <dd><code><var>expression</var></code> を評価する。評価中のエラーは
+      <code>rp:dispatch-exception</code> と同様に処理される。
+  <dt><code>(rp:raise-os-error <var>errno</var>)</code> procedure
+  <dd><code>(rp:os-error <var>errno</var>)</code> の型のエラーを発生させる。
+</dl>
+
+<a name="Signal"><h2>シグナル</h2></a>
+<dl>
+  <dt><code>(rp:set-signal-handler <var>signal</var> <var>procedure</var>)</code> procedure
+  <dd><code><var>signal</var></code> はシステムで可能なシグナル番号、
+      <code><var>procedure</var></code> は１引数の手続きあるいは
+      <code>#t</code> または <code>#f</code> でなけばならない。
+      シグナル <code><var>signal</var></code> が発生すると
+      <code><var>procedure</var></code> が
+<pre>
+	(<var>procedure</var> <var>signal</var>)
+</pre>
+      の形で呼ばれるようになる。この <code><var>procedure</var></code>
+      中で行えることについては特に制限はない。
+      <code><var>procedure</var></code> が <code>#t</code>
+      の時はデフォルトの処理に戻し、<code>#f</code> の時はシグナルを
+      無視するようにする。戻り値は元のシグナルハンドラとなる。
+  <dt><code>(rp:signal-message <var>signal</var>)</code> procedure
+  <dd>シグナル <code><var>signal</var></code>
+      に対するメッセージを文字列として返す。
+  <dt><code>(rp:print-signal-message <var>signal</var> [<var>port</var>])</code> procedure
+  <dd><code><var>port</var></code> (省略時 <code>current-output-port</code>)
+      にシグナルメッセージを出力する。
+  <dt><code>(rp:raise-signal <var>signal</var>)</code> procedure
+  <dd>あたかもそのシグナルを捕獲したかのようにシグナル処理手続きを呼び出す。
+</dl>
+
+<a name="Port"><h2>ポート</h2></a>
+<dl>
+  <dt><code>(rp:current-error-port)</code> procedure
+  <dd><code>stderr</code> に対応する出力ポートを返す。
+  <dt><code>(rp:set-current-input-port [<var>port</var>])</code> procedure
+  <dt><code>(rp:set-current-output-port [<var>port</var>])</code> procedure
+  <dd>それぞれ <code>current-input-port</code>, <code>current-output-port</code>
+      を変更する。引数を省略すると起動直後の状態に戻す。
+  <dt><code>(open-input-string <var>string</var>)</code> procedure
+  <dd>文字列 <code><var>string</var></code> から入力をとる入力ポートを返す。
+  <dt><code>(open-output-string)</code> procedure
+  <dd>文字列に書き込む出力ポートを返す。
+  <dt><code>(get-output-string <var>port</var>)</code> procedure
+  <dd><code><var>port</var></code> は <code>rp:open-output-string</code>
+      で作られたポートでなければならない。その出力結果を文字列として取り出す。
+  <dt><code>(rp:open-input-procedure <var>procs</var>)</code> procedure
+  <dd>入力ポートを返す。<code><var>procs</var></code> は４要素の vector である。
+      これを
+<pre>
+	#(<var>getchar</var> <var>ungetchar</var> <var>getlinecount</var> <var>char-readyp</var>)
+</pre>
+      とする。それぞれの要素は手続きである。返されたポートから入力を行うと
+      <code><var>getchar</var></code> が呼ばれる。
+<pre>
+  	(<var>getchar</var>) => (<var>char</var> . <var>procs'</var>)
+</pre>
+      <code><var>procs'</var></code> は <code><var>procs</var></code> と同様の
+      vector である(以下同様。)これを
+<pre>
+  	#(<var>getchar'</var> <var>ungetchar'</var> <var>getlinecount'</var> <var>char-readyp'</var>)
+</pre>
+      とする。 <code><var>char</var></code> が文字であればそれがポートから
+      入力された文字となる。<code>(<var>error-code</var> <var>obj</var>)</code>
+      の形のリスト(その要素はエラー処理手続きの引数として与えられたものからなる)
+      であればポートからの入力はそれと同じ種類のエラーとなる。
+      <code>#f</code> であればポートは
+      <code>end-of-file</code> の状態にあるものとされる。
+      次のポートに対する操作では <code><var>procs'</var></code> が使用される。<br>
+      <code><var>ungetchar</var></code> は次のようにして呼ばれる。
+<pre>
+  	(<var>ungetchar</var> <var>char</var>) => <var>procs'</var>
+</pre>
+      この時 <code>(<var>getchar'</var>) => (<var>char</var> . <var>procs''</var>), <var>procs</var> == <var>procs''</var></code>
+      となることが期待される。<br>
+      <code><var>getlinecount</var></code> は次のようにして呼ばれる。
+<pre>
+	(<var>getlinecount</var>) => (<var>linecount</var> . <var>procs'</var>)
+</pre>
+      <code><var>linecount</var></code> は整数で、
+      <code><var>getlinecount</var></code> が呼ばれた時の行番号として扱われる。
+      ただし 0 の場合は行番号不明を意味するものとする。<br>
+      <code><var>char-readyp</var></code> は次のようにして呼ばれる。
+<pre>
+  	(<var>char-readyp</var>) => (<var>ready?</var> . <var>procs'</var>)
+</pre>
+      <code><var>ready?</var></code> がブール値の場合、
+      それがポートに対する <code>char-ready?</code> の値とされる。
+      <code>(<var>error-code</var> <var>obj</var>)</code> の形のリストであれば
+      その種類のエラーが発生する。
+<p>
+注: これらの手続きが呼ばれてリターンするまでの間、そのポートは使用できない。
+従って特にエラーは発生すべきでない。エラーとなるべき状況は上記インター
+フェースを通して手続きを呼び出した機構に通知することになる。また、これらの
+手続きが複数回リターンした場合の効果は予想できない。
+<p>
+  <dt><code>(rp:open-output-procedure <var>proc</var>)</code> procedure
+  <dd>出力ポートを返す。<code><var>proc</var></code> は手続きである。
+      返されたポートに出力を行うと <code><var>proc</var></code>
+      が次のようにして呼ばれる。
+<pre>
+	(<var>proc</var> <var>char</var>) => (<var>result</var> . <var>proc'</var>)
+</pre>
+      <code><var>char</var></code> は出力する文字である。
+      <code><var>result</var></code> が <code>#t</code>
+      であれば出力が正常に行われたものとされ、
+      <code>(<var>error-code</var> <var>obj</var>)</code> の形のリスト
+      であればその種類のエラーが発生する。
+      次のポートに対する操作では <code><var>proc'</var></code> が使用される。
+      <code>rp:open-output-procedure</code> に対する注が同様に適用される。
+  <dt><code>(rp:file-status <var>port</var>)</code> procedure
+  <dd><code><var>port</var></code> が <code>open-output-file</code>
+      あるいは <code>open-input-file</code> から得られたものでない場合は
+      エラーとなる。そうでない場合 <code><var>port</var></code>
+      のクローズ時の状態によって以下のような値が返される。
+      <table>
+      <tr>
+	<td><code>#f</code></td>
+	<td>まだクローズしていない</td>
+      </tr>
+      <tr>
+	<td>エラーが発生</td>
+	<td>クローズ操作(fclose, pclose)が -1 を返していた</td>
+      </tr>
+      <tr>
+	<td>整数値</td>
+	<td>クローズ操作(fclose, pclose)の戻り値(-1 以外)</td>
+      </tr>
+      </table>
+</dl>
+
+<a name="Debugger"><h2>デバッガサポート</h2></a>
+<dl>
+  <dt><code>(rp:apply-with-evaluator-hook <var>hook-function</var> <var>procedure</var> <var>arguments</var>)</code> 
+  <dt><code>(rp:hook-evaluator <var>hook-function</var> <var>expression</var> <var>environment</var> <var>continuation</var>)</code> 
+  <dt><code>(rp:call-evaluator <var>expression</var> <var>environment</var>)</code> 
+  <dt><code>(rp:top-level-environment)</code> 
+  <dt><code>(rp:expression->data <var>expression</var> <var>environment</var>)</code> 
+  <dt><code>(rp:hook-applicator <var>hook-function</var> <var>procedure</var>)</code> 
+  <dt><code>(rp:unhook-applicator <var>procedure</var>)</code> 
+  <dd>これらの手続きはここで充分に説明することはできない。
+      興味があれば dubugger.pi における step, trace 等の実現を調べられたい。
+      いずれ独立したドキュメントを用意するかもしれない。
+</dl>
+
+<a name="Bitwise"><h2>ビット毎の演算と浮動小数点数</h2></a>
+<dl>
+  <dt><code>(rp:bitwise-and <var>n1</var> <var>...</var>)</code> procedure
+  <dt><code>(rp:bitwise-or <var>n1</var> <var>...</var>)</code> procedure
+  <dt><code>(rp:bitwise-xor <var>n1</var> <var>...</var>)</code> procedure
+  <dt><code>(rp:bitwise-invert <var>n</var>)</code> procedure
+  <dd>各引数はexactな整数でなければならない。
+      それらを高々有限個のビットを除いて0である(非負の場合)
+      あるいは高々有限個のビットを除いて1である(負の場合、2の補数で表現する)
+      無限長のビット列とみなし、各ビット毎に倫理演算を施した結果を返す。
+  <dt><code>(rp:infinite? <var>z</var>)</code> procedure
+  <dt><code>(rp:not-a-number? <var>z</var>)</code> procedure
+  <dd>数 z が有限でない/非数である時に真を返す。
+</dl>
+
+<a name="Channel"><h2>チャネル</h2></a>
+<dl>
+  <dt><code>(rp:create-channel <var>proc</var>)</code> procedure
+  <dd><code><var>proc</var></code> は一引数の手続きである。
+      これを引数なしの手続き(ここでは <code><var>rcv</var></code> と呼ぶ)
+      を引数として呼び出す。この呼び出しはリターンしてはならない。
+      <code>rp:create-channel</code> の呼び出しそのものは一引数の手続き
+      (ここでは <code><var>snd</var></code> と呼ぶ)を返す。
+      <code><var>snd</var></code> を呼び出すと
+      <code><var>rcv</var></code> の呼び出しがその引数を返す。
+  <dt><code>(rp:with-channel-as-input-port <var>proc</var>)</code> procedure
+  <dd><code><var>proc</var></code> は一引数の手続きである。
+      これを入力ポート(ここでは <code><var>port</var></code> と呼ぶ)
+      を引数として呼び出す。この呼び出しはリターンしてはならない。
+      <code>rp:with-channel-as-input-port</code>
+      の呼び出しそのものは一引数の手続き
+      (ここでは <code><var>snd</var></code> と呼ぶ)を返す。
+      <code><var>snd</var></code> を呼び出すことで
+      <code><var>port</var></code> が以下のように動作する。
+	<table>
+	<tr><td><code>(snd <var>c</var>)</code> : <code><var>c</var></code> は文字</td>
+	    <td><code><var>c</var></code> が入力される</td></tr>
+	<tr><td><code>(snd (<var>error-code</var> <var>obj</var>))</code></td>
+	    <td>エラーが発生する</td></tr>
+	<tr><td><code>(snd 'eof)</code></td>
+	    <td><code>end-of-file</code> となる</td></tr>
+	<tr><td><code>(snd 'newline)</code></td>
+	    <td>行カウンタが進む</td></tr>
+	<tr><td><code>(snd #t)</code></td>
+	    <td><code>char-ready?</code> が真になる</td></tr>
+	<tr><td><code>(snd #f)</code></td>
+	    <td><code>char-ready?</code> が偽になる</td></tr>
+	</table>
+  <dt><code>(rp:with-output-port-as-channel <var>proc</var>)</code> procedure
+  <dd><code><var>proc</var></code> は一引数の手続きである。
+      これを引数なしの手続き(ここでは <code><var>rcv</var></code> と呼ぶ)
+      を引数として呼び出す。この呼び出しはリターンしてはならない。
+      <code>rp:with-output-port-as-channel</code>
+      の呼び出しそのものは出力ポート
+      (ここでは <code><var>port</var></code> と呼ぶ)を返す。
+      <code><var>port</var></code> を通して出力した文字は
+      <code><var>rcv</var></code> を呼ぶ毎にその値として得られる。
+</dl>
+
+<a name="Object"><h2>オブジェクト</h2></a>
+基本的な考え方については
+<a href="ftp://ftp.cs.indiana.edu/pub/scheme-repository/doc/pubs/swob.txt">
+"Scheming with Objects" (Ken Dickey, Computer Language, October 1992)</a>
+を参照のこと。
+<a href="http://www.cs.indiana.edu/scheme-repository/">
+"The Internet Scheme Repository"</a> から入手できる。
+<dl>
+  <dt><code>(rp:define-generic (<var>name</var> <var>this</var> . <var>args</var>) <var>exp</var> ...)</code> syntax
+  <dd><code><var>name</var></code> をメソッドとして定義する。
+      <code><var>exp</var></code> として少なくとも一つの式が書かれていれば
+      デフォルトの動作は
+      <code>(lambda (<var>this</var> . <var>args</var>) <var>exp</var> ...)</code>
+      の呼び出しとなる。
+      <code><var>exp</var></code> がない場合はデフォルトでは
+      <code>(rp:no-method <var>name</var> <var>obj</var>)</code>
+      型のエラーを発生する。
+      ここで <code><var>name</var></code> はメソッドの名前、
+      <code><var>obj</var></code> はメソッドを適用されたオブジェクト。
+  <dt><code>(rp:object-constructor ((<var>ancestor</var> <var>init</var>) ...) ((<var>operation</var> <var>this</var> . <var>arg</var>) <var>exp</var> ...) ...)</code> syntax
+  <dd>インスタンスオブジェクトを生成する。
+      <code><var>ancestor</var></code> は基底オブジェクトの名前で、対応する
+      <code><var>init</var></code> を評価した値に束縛される。
+      <code><var>operation</var></code> は <code>rp:define-generic</code>
+      で定義したメソッドを指定する。そのメソッドが呼ばれると対応する手続き
+      <code>(lambda (<var>this</var> . <var>arg</var>) <var>exp</var> ...)</code>
+      が呼び出される。
+  <dt><code>(rp:proxy <var>ancestor</var> <var>operation</var>)</code> procedure
+  <dd><code><var>operation</var></code> の処理を基底オブジェクト
+      <code><var>ancestor</var></code>
+      に委任するために呼び出すべき手続きを返す。
+</dl>
+<hr>
+<h5><a href="index.html#Others">インデックス</h5>
+</body>
+</html>

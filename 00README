@@ -1,0 +1,12 @@
+$Id: 00README,v 1.1 1996/12/16 06:50:24 qfwfq Exp $
+
+This is rhizome/pi, a scheme interpreter/compiler for unix like operating
+systems and win32 environment.
+The package includes rhizome/kappa, library for symbolic processing laguages.
+
+Read README or README.j for more information.
+README.j is written in japanese, encoded in MS-Kanji code.
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

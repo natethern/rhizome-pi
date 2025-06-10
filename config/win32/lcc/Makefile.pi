@@ -1,0 +1,60 @@
+# @(#)$Header: /u/master/rhizome/config/win32/lcc/Makefile.pi,v 1.1 2002/09/27 08:52:34 qfwfq Exp $
+# $Log: Makefile.pi,v $
+# Revision 1.1  2002/09/27 08:52:34  qfwfq
+# Add support of linux and lcc-win32.
+#
+
+BASEDIR = c:\rhizome
+BINDIR = $(BASEDIR)\bin
+LIBDIR = $(BASEDIR)\lib
+
+INCLDIR=..\include
+RM=del /f
+
+CDEBUGFLAGS=-O
+#CDEBUGFLAGS=-g2 -DREPORT_STATS
+CC=lcc
+CFLAGS=$(CDEBUGFLAGS) -nw -DWIN32 -DRK_BIND_EXPORT -I$(INCLDIR)
+LD=lcclnk
+LDFLAGS=-subsystem console
+AR=lcclib
+
+STATOBJ=statmain.obj
+OBJS=eval.obj prim_exp.obj abbrev.obj subr.obj port.obj numeric.obj charactr.obj reflect.obj main.obj helper.obj \
+	dynload.obj $(STATOBJ)
+LIBRARY=rhzpi.lib
+HDRS=$(INCLDIR)\rhiz_cnf.h $(INCLDIR)\rhizome.h rhiz_pi.h
+
+.c.obj:
+	$(CC) $(CFLAGS) -c $<
+
+all:
+	cd ..\kappa && $(MAKE)
+	$(MAKE) pi_boot.exe
+	cd compiler && $(MAKE)
+
+pi_boot.exe: $(LIBRARY) boot.obj
+	$(LD) $(LDFLAGS) -o pi_boot.exe boot.obj .\$(LIBRARY) ..\kappa\rhizome.lib
+
+$(LIBRARY): $(OBJS)
+	$(AR) /out:$(LIBRARY) $(OBJS)
+
+install: all
+	cd ..\kappa && $(MAKE) LIBDIR=$(LIBDIR) install
+	copy rhiz_pi.h $(LIBDIR)
+	copy $(LIBRARY) $(LIBDIR)
+	copy $(STATOBJ) $(LIBDIR)
+	cd compiler && $(MAKE) BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) install
+
+$(OBJS) boot.obj: $(HDRS)
+
+clean:
+	-$(RM) *.obj pi_boot.exe
+
+clobber: clean
+	-$(RM) $(LIBRARY)
+
+distclean:
+	cd ..\kappa && $(MAKE) clobber
+	$(MAKE) clobber
+	cd compiler && $(MAKE) clobber

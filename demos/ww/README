@@ -1,0 +1,81 @@
+This directory contains some demonstration programs using Windows-api Wrapper
+(ww) library.
+
+To execute these programs, start piw and load them, or specify program name as
+the argument to piw. To compile programs, use Makefile in the directory.
+Makefile defines macro WWLIB at the top lines, select one according to C
+compiler you use.
+
+minimal.scm	Minimal sample. Does nothing othe than displaying window.
+
+hello1.scm	Displays string in its window.
+
+hello2.scm	Centers string display.
+
+hello3.scm	Menu and dialog box are added.
+
+scrib.scm	Draw figure with mouse.
+
+calcpad.scm	Mimicks calculation pad. Make cell by dragging mouse. Each
+		cell has label and expression. Labels contain arbitrary string
+		and expressions contain S-expression of Scheme. Value of
+		expression is displayed in each cell. You can use '?' macro
+		discussed later to refer value of other cell. Re-calculation
+		occures in the order of cretion of cells and no means to change
+		this order is implemented. Selecting the menu item
+		Window->Console opens another window and read-eval-print loop
+		is executed in it. You can evaluate any Scheme expression in
+		this window and the following macros and procedures are defined
+		to refer and minipulate cells.
+
+		(? cell-label)
+			Refers the value of cell. Specify the label of cell
+			in the place of cell-label as string or symbol.
+
+		(! cell-label)
+			Refers the cell itself. Use this as cell argument in
+			the following procedures.
+
+		(calc:cell-position cell)
+			Upper left coordinate of cell.
+
+		(calc:cell-size cell)
+			Width and height of cell.
+
+		(calc:move-cell cell x y)
+			Move cell to (x,y).
+
+		(calc:resize-cell cell w h)
+			Change size of cell to (w,h).
+
+		(calc:recalc cell)
+			Re-calculate cell.
+
+		(calc:recalc-bis cell)
+			Re-calculate all cells after specified cell.
+
+		(calc:recalc-all)
+			Re-calculate all cell.
+
+		(calc:reload)
+			Re-load current sheet.
+
+		(calc:new-cell x y w h caption)
+			Create new cell.
+
+		(calc:delete-cell cell)
+			Delete the cell.
+
+		(calc:select-cell cell)
+			Select the cell.
+
+		(calc:set-caption cell caption)
+			Change label of cell.
+
+		(calc:set-expression cell exp)
+			Change expression of cell.
+
+		(calc:on-load exp)
+			Make exp to be evaluated when sheet is loaded.
+
+life.scm	Conway's game of life.

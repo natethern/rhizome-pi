@@ -1,0 +1,417 @@
+$Id: procs,v 1.6 1999/02/15 08:58:45 qfwfq Exp $
+
+1. Interpretation of file name
+
+  On procedures which takes file name as argument and carries out inout/output
+  on it, the following interpretation is done to the string given as file name.
+
+	"pathname"	First element is character other than #\< #\> #\|
+			Treat entire string as a path name of file.
+			If a file with the given name already exists on output
+			procedure, the result is unspecified.
+	"<pathname"	First element is #\<
+			Valid on input procedure. Treat susbstring starting
+			from the second character as a path name of file.
+	">pathname"	First element is #\> and second is not #\>
+			Valid on output procedure. Treat substring starting
+			from the second character as a path name of file.
+			If a file with the given name already exists,
+			overwrite it.
+	">>pathname"	First element is #\> and second is #\>
+			Valid on output procedure. Treat substring starting
+			from the third character as a path name of file.
+			If a file with the given name already exists,
+			append to it.
+	"|command"	Frist element is #\|
+			Treat substring starting from the second character as
+			a command string. On input procedure, resulting port
+			inputs from its standard output. On output procedure,
+			resulting port outputs to its standard input. Exit
+			status can be retrieved by rp:file-status (see below.)
+
+  Because whether the string is for input or for output is determined by the
+  procedure it is supplied for, pipe symbol is always put on the head. Notice
+  that the syntax is different from that in perl in this point.
+
+
+2. General
+
+(gensym)							procedure
+  Generates (uninterned) symbol.
+
+(rp:symbol-value symbol [default-value])			procedure
+  Value of symbol (in the toplevel environment.) If symbol is unbound,
+  default-value is returned. If one is not supplied, return value in that
+  case is unspecified. This is intended to be used to implement features
+  such as property list seen in other lisp dialects. Mixing the usage of
+  symbol as a variable on program and the usage of rp:symbol-value is
+  discouraged.
+
+(rp:symbol-value-set! symbol value)				procedure
+  Set value of symbol (in the toplevel environment.) See note on
+  rp:symbol-value.
+
+(rp:symbol-bound? symbol)					procedure
+  Returns #t if symbol is bound in the toplevel environment, otherwise
+  returns #f.
+
+(rp:symbol-aux-datum-set! symbol obj)				procedure
+  Associate arbitrary value obj to symbol. This value can be retrieved by
+  rp:symbol-aux-datum aftarwards.
+
+(rp:symbol-aux-datum symbol [default-value])			procedure
+  Retrieve the value assoceiated to symbol by rp:symbol-aux-datum. If no
+  value is associated, default-value is returned if one is specified.
+
+(rp:symbol-aux-datum-assigned? symbol)				procedure
+  Returns #t if rp:symbol-aux-datum-set! was applied to symbol, otherwise
+  returns #f.
+
+(break [prompt])						procedure
+  Execute read-eval-print loop. Prompt is given as string. If it is not
+  supplied, defaults to "break> ".
+
+(continue)							procedure
+  Exit from innermost break loop. In normal toplevel, this means the end of pi.
+  The variable `continue' is unbound if break loop is not executing.
+
+(rp:object->string object)					procedure
+  Return external representation of object as string.
+
+(rp:string->object string)					procedure
+  Return a object with external representation string.
+
+(rp:locally ((var val) ...) (cleanup ...) body ...)		syntax
+  Values of val are bound to var as in let, expressions in body are evaluated.
+  When last expression of body returns or exit by error in evaluationg body,
+  expressions in cleanup are evaluated in the scope of binding. If all
+  expressions in body returned, last value become the value of expression.
+
+(rp:char-dbcs-lead-byte? char)					procedure
+  Returns true if char is first byte of double byte charecter. Criterion
+  depends on operating system and user environment settings. Of cource, this
+  procedure makes sence only for encoding systems in which all multibyte
+  characters consists of exactly two bytes.
+
+(rp:dbg-set-flag symbol value)					procedure
+  Associates values to symbol. Value can be retrieved by rp:dbg-debugging?
+  procedure. This is intended to be used for managing global flags which
+  affect expansion of some macros or execution of programs.
+
+(rp:dbg-debugging? symbol)					procedure
+  Retrieves values associated to symbol by rp:dbg-set-flag procedure.
+  If no values is associated, returns #f by default.
+
+
+3. Macros
+
+(rp:eval-in-compiler-environment expression)			syntax
+  On interpreter, expression is simply evaluated. Put in toplevel, expression
+  will be evaluated at compile time, leaving its side effects to compilation
+  process.
+
+(rp:load-into-compiler-environment file)			syntax
+  Have same effect with `(load file)' on interpreter. Put in toplevel, file
+  will be loaded to the environment of compiler when compiled. So the content
+  of the file will affect the compilation process insted of included in the
+  output code.
+
+(rp:use-macro-package file)					syntax
+  Search file from several directories and load it as in
+  rp:load-into-compiler-environment. Search order is
+	* current directory
+	*(in pisc) directories specified by -mpath option
+	* directories listed in the environment variable RHIZOME_MACRO_PATH
+	* directory specified by the environment variable RHIZOME_LIB
+  Moreover, search path is stored in the variable rp:*macro-search-list*,
+  so search order is controlled by assigning arbitrary value to this.
+
+
+4. System environment
+
+(exit [exit-code])						procedure
+  Exit pi with exit-code as status. Default of exit-code is 0.
+
+(system string)							procedure
+  Execute system() in the standard library and returns its vaule.
+
+(getenv string)							procedure
+  Vaule of environment variable string.
+
+(file-exists? string)						procedure
+  Returns #t if a file with name string exists, #f otherwise.
+
+*invocation-arg*						global variable
+  List consists with program name and its arguments.
+
+(rp:command-line-arguments)					procedure
+  Vector of command line arguments.
+
+(rp:time)							procedure
+  Information of execution time of process in the form #(real user sys).
+
+(rp:errno)							procedure
+  Value of errno in the standard library.
+
+(rp:strerror errono)						procedure
+  String retrieved by calling strerror(errno) in standard library.
+
+(rp:load-compiled-module module)				procedure
+  Loads module which is created by -loadable option of pisl.
+
+(rp:identify-platform)						procedure
+  Returns list which identifies platform. The list is consists of at least
+  3 elements. First elements identifies sort of operating system. Second
+  element identifies platform architecture. Third element is a string
+  representing version of operating system.
+
+
+5. Errors
+
+(rp:catch-error procedure expression)				syntax
+  Catch errors.
+  First, evaluate procedure. The result must be a procedure with two arguments.
+  Next, evaluate expression and return its vaule. If error is caused in
+  evaluating expression, procedure is called in the form
+	(procedure error-code obj)
+  and the vaule will be the value of entire form.
+  The error processing environment consists a part of continuation.
+
+(rp:call-with-error-handler error-proc thunk)			procedure
+  (rp:catch-error procedure expression) is implemented as a macro expanded to
+  the following.
+	(rp:call-with-error-handler error-proc (lambda () expression))
+
+(rp:error-message error-code obj)				procedure
+  Returns error message as a string.
+
+(rp:print-error-message error-code obj [port])			procedure
+  Outputs error message to port (default is current-output-port.)
+
+(rp:exception (type arg ...) message-proc)			syntax
+  Returns procedure which takes arguments corresponding to (arg ...).
+  If this procedure gets called, exception of type (type arg ...) is generated.
+  Type must be a symbol, message-proc must be evaluated (in the environment
+  where (arg ...) is bound to arguments) yielding an one argument procedure.
+  When error message of the exception is needed, result of message-proc is
+  called with an output port as argument and it must generate appropriate
+  message on that port.
+
+(rp:displatch-exception error-code obj ((error-type arg ...) action ...) ...)
+  Error-code and obj are arguments of error handling procedure obtained via
+  rp:call-with-error-handler. Clause with matching type is selected and its
+  action is executed in the environment where (arg ...) is bound to data of
+  exception. Result of last expression of action will returned.
+  Special exception type (default error-code obj) matches any type of error.
+  If there is no matching clause, error of same type is generated.
+  Following error types are pre-defined, though much of them are not so useful.
+	(rp:os-error errno)		function call results in error
+	(rp:read-syntax-error message)	syntax error in (read)
+	(rp:eof-error)			unexpected end of file
+	(rp:storage-error)		out of storage
+	(rp:overflow-error)		overflow of numerical calculation
+	(rp:div0-error)			divide by zero
+	(rp:ldso-error message)		error related to external function
+	(rp:eval-error obj)		illegal object is evaluated
+	(rp:var-unbound-error var)	variable is unbound
+	(rp:apply-error obj)		application of non-procedure
+	(rp:arg-error)			argument type missmatch
+	(rp:primitive-error exp)	wrong primitive syntax
+	(rp:excess-formal-error)	too many formal parameters
+	(rp:arg-count-error)		argument count missmatch
+	(rp:define-error)		define statement at illegal position
+	(rp:exception-error data)	exception generated via rp:exception
+	(rp:map-error)			arguments of map are not in same length
+	(rp:eval-procedure-error)	illegal behavior of evaluator procedure
+	(rp:busy-port-error)		procedure port is used while busy
+	(rp:port-procedure-error)	illegal behavior of port procedure
+	(rp:read-only-var-error var)	value of variable is immutable
+  Note that type rp:exception-error matches all exception generated via
+  rp:exception.
+
+(rp:try-except expression ((error-type arg ...) action ...) ...) syntax
+  Expression is evaluated and its value will be returned. If error is cuased
+  while evaluation, it will be handled as in rp:dispatch-exception.
+
+(rp:raise-os-error errno)					procedure
+  Generate error of type (rp:os-error errno).
+
+
+6. Signals
+
+(rp:set-signal-handler signal  procedure)			procedure
+  Signal is a signal numberd by system, procedure is a procedure with one
+  argument or #t or #f. If signal is raised, procedure is called as
+	(procedure signal)
+  No particular restriction is imposed on the behavior of this procedure.
+  If procedure is #t, the default action is restored. If procedure is #f,
+  signal will be ignored. Vaule is the previous signal handler.
+
+(rp:signal-message signal)					procedure
+  Returns signal message as a string.
+
+(rp:print-signal-message signal [port])				procedure
+  Output signal message to port (default is current-output-port.)
+
+(rp:raise-signal signal)					procedure
+  Call signal handler procedure as if that signal was caught.
+
+
+7. Ports
+
+(rp:current-error-port)						procedure
+  Returns the output port which corresponds to stderr.
+
+(rp:set-current-input-port [port])				procedure
+(rp:set-current-output-port [port])				procedure
+  Changes current-input-port, current-output-port respectively. If the argument
+  is omitted, the original one at invocation is restored.
+
+(open-input-string string)					procedure
+  Returns input port which takes input from string.
+
+(open-output-string)						procedure
+  Returns output port which writes to string.
+
+(get-output-string port)					procedure
+  Port must be a output port made by rp:open-output-string. Retrieves string
+  consisting of characters outputted to the port so far.
+
+(rp:open-input-procedure procs)					procedure
+  Returns input port. Procs is a vector with four elements, say
+	#(getchar ungetchar getlinecount char-readyp)
+  Each element is a procedure. Doing a input from resulting port causes
+  invocation of getchar.
+  	(getchar) => (char . procs')
+  procs' is a vector simillar to procs (simillar in the following,) say
+  	#(getchar' ungetchar' getlinecount' char-readyp')
+  If char is a character, it will be a charecter read from the port. If char
+  is a list of form (error-code obj) where elements are ones given as arguments
+  of error handling procedure, input lasts with a error of same type. If char
+  is #f, port is effectively in a end-of-file status. In the next usage of
+  port, procs' will be used.
+  Ungetchar gets called as
+  	(ungetchar char) => procs'
+  Here, (getchar') => (char . procs''), procs == procs'' is expected.
+  Getlinecount gets called as
+	(getlinecount) => (linecount . procs')
+  linecount is a integer, treated as a line number when getlinecount is called.
+  In particular, if it was 0, it means the line number is not applicable.
+  Char-readyp gets called as
+  	(char-readyp) => (ready? . procs')
+  If ready? is a Boolean value, it will be a vaule of char-ready? of that port.
+  If it is a list of form (error-code obj), error of that type is caused.
+
+  Note: In the duration of execution of these procedures, the port will be
+  unusable. So, in particular, errors should not be generated. Errorneous
+  conditions should be reported to the mechanism which calls the procedure
+  via the interface above. The effect is unpreditable if an instance of
+  invocation of these procedures returns multiple times.
+
+(rp:open-output-procedure proc)					procedure
+  Returns output port. Proc is a procedure. Doing a output to resulting port
+  causes invocation of proc in the form
+	(proc char) => (result . proc')
+  Char is a character to be outputted. If result is #t, the output is assumed
+  to be done normally. If result is a list of form (error-code obj), error of
+  that type will be generated. In the next usage of port, proc' will be used.
+  The same note is applied as rp:open-output-procedure.
+
+(rp:file-status port)						procedure
+  Port must be a port result from open-output-file or open-input-file.
+  The following vaules are returned accroding to the status of port at closing
+  time.
+	#f			Port is not closed yet.
+	Generates a error	Underlying close operation (flose or pclose)
+				returned -1.
+	Integer vaule		Return vaule other than -1 of underlying
+				close operation (fclose of pclose.)
+
+
+8. Debugger support
+
+(rp:apply-with-evaluator-hook hook-function procedure arguments)
+(rp:hook-evaluator hook-function expression environment continuation)
+(rp:call-evaluator expression environment)
+(rp:top-level-environment)
+(rp:expression->data expression environment)
+(rp:hook-applicator hook-function procedure)
+(rp:unhook-applicator procedure)
+  Dateiled descriptions of these procedures will not be given here. If you are
+  interested, cunsult to the implementation of step, trace and such in
+  debugger.pi. The auther may write individual document in the future.
+
+
+9. Bitwise operations and floating point numbers
+
+(rp:bitwise-and n1 ...)						procedure
+(rp:bitwise-or n1 ...)						procedure
+(rp:bitwise-xor n1 ...)						procedure
+(rp:bitwise-invert n)						procedure
+  Each argument must be an exact integer. Regarding them as infinite length bit
+  sequence in which almost all bits are 0 (when the number is nonnegative) or
+  almost all bits are 1 (when the number is negative and represented in
+  complement of 2), returns the result of applying logical operantion to each
+  bit.
+
+(rp:infinite? z)						procedure
+(rp:not-a-number? z)						procedure
+  Return true if number z is not finite / not-a-number respectively.
+
+
+10. Channel
+
+(rp:create-channel proc)					procedure
+  Proc is a procedure with one argument. This gets called with an argument
+  (say rcv here), which is a procedure with no arguments. This call shall never
+  return. Call to rp:create-channel itself returns a procedure (say snd here).
+  Calling snd results in a call to rcv returning its argument as value.
+
+(rp:with-channel-as-input-port proc)				procedure
+  Proc is a procedure with one argument. This gets called with an argument
+  (say port here), which is an input port. This call shall never return.
+  Call to rp:with-channel-as-input-port itself returns a procedure
+  (say snd here). Calling snd results in port acts as follows.
+	(snd c) : c is a charecter	Input c is generated.
+	(snd (error-code obj))		Error is generated.
+	(snd 'eof)			Become end-of-file.
+	(snd 'newline)			Advance line counter.
+	(snd #t)			Char-ready? become true.
+	(snd #f)			Char-ready? become false.
+
+(rp:with-output-port-as-channel proc)				procedure
+  Proc is a procedure with one argument. This gets called with an argument
+  (say rcv here). This call shall never return. Call to
+  rp:with-output-port-as-channel itself returns an output port (say port here).
+  Charecters output through port are retrieved by calling rcv.
+
+
+11. Object
+
+For basic concepts, refer to "Scheming with Objects" (Ken Dickey,
+Computer Language, October 1992). This can be accessed from
+"The Internet Scheme Repository"
+(http://www.cs.indiana.edu/scheme-repository/) as
+ftp://ftp.cs.indiana.edu/pub/scheme-repository/doc/pubs/swob.txt
+
+(rp:define-generic (name this . args) exp ...)			syntax
+  Define name as a method. If at lease one expression exists in place of exp,
+  default action is to call (lambda (this . args) exp ...).
+  When no exp exists, default action raises error of type
+  (rp:no-method name obj), where name is the name of method and obj is the
+  object to which method is applied.
+
+(rp:object-constructor ((ancestor init) ...)
+  ((operation this . arg) exp ...) ...)				syntax
+  Generate instance object. Ancestor names base object and bound to the value
+  results from evaluating corresponding init. Operation is method defined by
+  rp:define-generic. When the method is called, corresponding procedure
+  (lambda (this . arg) exp ...) is applied.
+
+(rp:proxy ancestor operation)					procedure
+  Returns procedure to call in order to delegate processing of operation
+  to the base object ancestor.
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

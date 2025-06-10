@@ -1,0 +1,76 @@
+$Id: README,v 1.8 2005/09/13 08:11:39 qfwfq Exp $
+Dedicated to the memory of ALGOL N
+
+1.  What is this?
+
+  rhizome/pi is a Scheme implementation (interpreter and compiler,
+  compiler generates program in C language) conforming to R^5RS.
+  It has following characteristics.
+
+  * It is implemented completely in continuation passing style.
+    Being so, it never makes recurseive call in machine labguage
+    level, and depth of stack is bound to finite constant (I did
+    not investigate the precise limit, but it must be no greater
+    than 1 kilobytes.)
+  * Application of call-with-current-continuation and resulting
+    comtinuation object is very fast. Execution time of them is
+    no greater than normal procedures (such as car, cdr, cons.)
+  * Employes syntax-case as low level macro system.
+  * Aside from trace, there is a debugger capable of single stepping
+    of LISP code. This debugger itself is mostly written in LISP
+    code, and implementing custom debugging feature is also possible
+    (but, procedures for hooking evaluator are not fully documented
+    yet.)
+  * Handling errors and signals are possible.
+  * There is no limitation of program which may be compiled. Execution
+    of compiled program is done simillary to loading, by sequential
+    evaluation of top level expressions.
+  * Shared objects (DLLs in term of Win32) can be loaded dynamically
+    and functions in them can be called from scheme code. Moreover,
+    callbacks can be written in scheme code. See doc/extfunc for details.
+
+  This implementation is not aimed to solely as tools for study of
+  so called artificial intelligence, but intended to be used as a
+  general purpose developing and executing environment of applications.
+
+  rhizome/kappa is a indivisual package consisting of runtime routines
+  of rhizome/pi, which will be useful in other symbolic processing languages.
+
+2.  Supported environments.
+
+  The author tested the program under following environments and C compilers.
+
+  	OpenBSD 3.7 i386
+	Linux i386
+	Win32 (intel) with Microsoft, Borland or lcc-win32 C compiler
+	Win32 (intel) with Cygwin environment
+
+  There should be no serious problems in porting to other unix like
+  operating systems.
+
+3.  Installation instructions.
+
+  Refer to file INSTALL.
+
+4.  How to use it.
+
+  Usage of interpreter and compiler.
+    Refer to file doc/invoke.
+    Manual pagers are doc/*.man. Please install them manually to
+    appropriate place if necessary. Formatted manual pages are doc/*.0.
+
+  Procedures and such proper to rhizome/pi.
+    Refer to file dos/procs for procedures and such which is not
+    specified in R^5RS.
+
+  Usage of debugger.
+    Refer to file doc/debugger.
+
+  Other notes.
+    Refer to file doc/caveat.
+
+5.  The author.
+
+  INUJIMA, Masaru
+  qfwfq@kt.rim.or.jp
+  http://www.kt.rim.or.jp/~qfwfq/

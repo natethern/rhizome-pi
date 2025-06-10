@@ -1,0 +1,51 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: toplevel.pi,v 1.3 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: toplevel.pi,v $
+; Revision 1.3  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.2  1999/06/15 07:21:38  qfwfq
+; Preliminary BeOS support
+;
+; Revision 1.1  1996/09/06 06:13:16  qfwfq
+; Version 0.20 unix revision is up.
+;
+
+(rp:eval-in-compiler-environment
+  (begin
+    (define platform (car (cm-platform-id)))
+    (define-syntax path-stripper
+      (if (or (eq? platform 'windows) (eq? platform 'beos))
+	(syntax-rules ()
+	  ((_ arg)
+	   (let* ((str arg) (len (rp:string-length str)))
+	     (let loop ((i 0) (k #f))
+	       (cond ((rp:= i len)
+		      (if (and k (rp:< k len)) (rp:substring str k len) str))
+		     ((rp:eqv? (rp:string-ref str i) (cm-path-separate-char))
+		      (loop (rp:+ i 1) (rp:+ i 1)))
+		     (else (loop (rp:+ i 1) k)))))))
+	(syntax-rules () ((_ arg) arg))))
+    (define-syntax suffix-stripper
+      (if (eq? platform 'windows)
+	(syntax-rules ()
+	  ((_ arg)
+	   (let* ((str arg) (len (rp:string-length str)))
+	     (if (and (rp:< 4 len) (rp:string-ci=? (rp:substring str (rp:- len 4) len) ".exe"))
+	       (rp:substring str 0 (rp:- len 4)) str))))
+	(syntax-rules () ((_ arg) arg))))))
+
+(break (rp:string-append (suffix-stripper (path-stripper (rp:car *invocation-arg*))) ": "))

@@ -1,0 +1,64 @@
+# @(#)$Header: /u/master/rhizome/config/beos/intel/Makefile.pi,v 1.1 1999/06/15 07:14:04 qfwfq Exp $
+# $Log: Makefile.pi,v $
+# Revision 1.1  1999/06/15 07:14:04  qfwfq
+# Rearrange configuration files.
+#
+
+BASEDIR = /boot/home
+BINDIR = $(BASEDIR)/bin
+LIBDIR = $(BASEDIR)/lib/rhizome
+SHLIBDIR = $(LIBDIR)
+
+CDEBUGFLAGS=-O2
+#CDEBUGFLAGS=-g -DREPORT_STATS
+
+EXESUFFIX=
+MODULE=rhzpi
+
+CC=gcc
+INCLDIR=../include
+CFLAGS=$(CDEBUGFLAGS) -m486 -DRK_BIND_EXPORT -I$(INCLDIR)
+RANLIB=ranlib
+SYSLIBS=
+
+OBJS=eval.o prim_exp.o abbrev.o subr.o port.o numeric.o charactr.o reflect.o main.o helper.o dynload.o
+SOBJS=$(OBJS)
+SHAREOBJ=$(MODULE).so
+LIBRARY=lib$(MODULE).a
+HDRS=$(INCLDIR)/rhiz_cnf.h $(INCLDIR)/rhizome.h rhiz_pi.h
+
+all: all_targets
+	cd ../kappa; $(MAKE)
+	$(MAKE) pi_boot$(EXESUFFIX)
+	cd compiler; $(MAKE) SHLIBDIR=$(SHLIBDIR)
+
+install: all
+	cd ../kappa; $(MAKE) LIBDIR=$(LIBDIR) install
+	install -c -m 444 rhiz_pi.h $(LIBDIR)
+	@set -x; install -c $(LIBRARY) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(LIBRARY); chmod 444 $(LIBDIR)/$(LIBRARY)
+	cd compiler; $(MAKE) BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) SHLIBDIR=$(SHLIBDIR) install
+
+all_targets: $(SHAREOBJ) $(LIBRARY)
+
+pi_boot$(EXESUFFIX): $(LIBRARY) boot.o
+	$(CC) $(CFLAGS) -o pi_boot boot.o ./$(LIBRARY) ../kappa/librhizome.a $(SYSLIBS)
+
+$(SHAREOBJ): $(SOBJS)
+	$(LD) -x -r -o $@ $(SOBJS)
+
+$(LIBRARY): $(OBJS)
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+	$(RANLIB) $@
+
+$(OBJS) $(SOBJS) boot.o: $(HDRS)
+
+clean:
+	rm -f pi_boot$(EXESUFFIX) $(SHAREOBJ) *.o a.* core.*
+
+clobber: clean
+	rm -f $(LIBRARY)
+
+distclean:
+	cd ../kappa; $(MAKE) clobber
+	$(MAKE) clobber
+	cd compiler; $(MAKE) clobber

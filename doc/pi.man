@@ -1,0 +1,39 @@
+.\" @(#)$Id: pi.man,v 1.2 1997/10/20 04:18:33 qfwfq Exp $
+.\" $Log: pi.man,v $
+.\" Revision 1.2  1997/10/20 04:18:33  qfwfq
+.\" Some enhancements in startup of interpreter.
+.\"
+.\" Revision 1.1  1996/12/16 06:50:43  qfwfq
+.\" Created documents
+.\"
+.TH PI 1 "Rhizome/pi"
+.SH NAME
+pi \- A Scheme Interpreter
+.SH SYNOPSIS
+.B pi
+[
+.I file
+] [
+.I arguments
+]
+.SH DESCRIPTION
+Pi executes ordinary read-eval-print loop if invoked without any arguments.
+It exits when expression (exit) is evaluated.
+.LP
+If invoked with command line arguments, pi considers the first argument as
+file name, and loads named file before entering read-eval-print loop.
+Subsequent arguments may be used to give parameters to application program.
+To get command line arguments from program, use global variable
+*invocation-arg* or procedure rp:command-line-arguments.
+.LP
+Using "--" as the first argument means invoke pi interactively, while giving
+parameters according to remaining arguments.
+.LP
+If pi is invoked interactively, content of the environment variable
+RHIZOME_PI_RC is evaluated, if it is set, before entering read-eval-print loop.
+.SH ENVIRONMENT
+.TP
+RHIZOME_PI_RC
+Startup command for interactive use of pi.
+.SH AUTHOR
+INUJIMA Masaru (qfwfq@kt.rim.or.jp).

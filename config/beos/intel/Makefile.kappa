@@ -1,0 +1,49 @@
+# @(#)$Header: /u/master/rhizome/config/beos/intel/Makefile.kappa,v 1.1 1999/06/15 07:14:04 qfwfq Exp $
+# $Log: Makefile.kappa,v $
+# Revision 1.1  1999/06/15 07:14:04  qfwfq
+# Rearrange configuration files.
+#
+
+CDEBUGFLAGS=-O2
+#CDEBUGFLAGS=-g -DREPORT_STATS
+
+TESTEXE=test
+MODULE=rhizome
+
+SYMBOL=symb_23.o
+
+CC=gcc
+INCLDIR=../include
+CFLAGS=$(CDEBUGFLAGS) -m486 -DRK_BIND_EXPORT -I$(INCLDIR)
+RANLIB=ranlib
+SYSLIBS=
+
+OBJS=cellhdlr.o $(SYMBOL) runengin.o read.o write.o number.o ldso.o
+SOBJS=$(OBJS)
+SHAREOBJ=$(MODULE).so
+LIBRARY=lib$(MODULE).a
+HDRS=$(INCLDIR)/rhiz_cnf.h $(INCLDIR)/rhizome.h
+
+all: $(SHAREOBJ) $(LIBRARY)
+
+$(SHAREOBJ): $(SOBJS)
+	$(LD) -x -r -o $@ $(SOBJS)
+
+$(LIBRARY): $(OBJS)
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+	$(RANLIB) $@
+
+test: $(LIBRARY)
+	$(CC) $(CFLAGS) test.c ./$(LIBRARY) $(SYSLIBS)
+
+$(OBJS) $(SOBJS): $(HDRS)
+
+install: $(LIBRARY)
+	cd ../include; install -c -m 444 rhiz_cnf.h rhizome.h $(LIBDIR)
+	@set -x; install -c $(LIBRARY) $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$(LIBRARY); chmod 444 $(LIBDIR)/$(LIBRARY)
+
+clean:
+	rm -f *.o $(SHAREOBJ) $(TESTEXE) core.*
+
+clobber: clean
+	rm -f $(LIBRARY)

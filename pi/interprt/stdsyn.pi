@@ -1,0 +1,381 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: stdsyn.pi,v 1.6 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: stdsyn.pi,v $
+; Revision 1.6  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.5  1999/02/15 08:24:09  qfwfq
+; r5rs -- multiple values, dynamic-wind and eval
+;
+; Revision 1.4  1998/07/31 11:29:26  qfwfq
+; Features addition for release 0.45
+;
+; Revision 1.3  1997/10/16 06:25:32  qfwfq
+; Release version 0.40
+;
+; Revision 1.2  1997/05/12 07:21:32  qfwfq
+; version 0.31 - some enhancements on error handling etc.
+;
+; Revision 1.1  1997/04/26 13:29:21  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+
+(rp:define syntax-case (rp:cons (rp:syntax-mark) rp:syntax-case))
+
+(rp:define define-syntax
+  (rp:cons (rp:syntax-mark)
+    (lambda (x)
+      (syntax-case x ()
+	((_ keyword transformer) (syntax (rp:define keyword (rp:cons (rp:syntax-mark) transformer))))))))
+
+(define-syntax define
+  (lambda (x)
+    (syntax-case x ()
+      ((_ (f . a) b ...) (syntax (rp:define f (letrec ((f (lambda a b ...))) f))))
+      ((_ n v) (syntax (rp:define n v))))))
+
+(define-syntax with-syntax
+  (lambda (x)
+    (syntax-case x ()
+      ((_ () e ...) (syntax (let-syntax () e ...)))
+      ((_ ((p x)) e ...) (syntax (syntax-case x () (p (let-syntax () e ...)))))
+      ((_ ((p x) ...) e ...) (syntax (syntax-case (rp:list x ...) () ((p ...) (let-syntax () e ...))))))))
+
+(define-syntax syntax-rules
+  (lambda (x)
+    (syntax-case x ()
+      ((_ (key ...) ((dummy . pb) templ) ...)
+       (with-syntax (((us ...) (generate-temporaries (syntax (dummy ...)))))
+	 (syntax (lambda (x) (syntax-case x (key ...) ((us . pb) (syntax templ)) ...))))))))
+
+(define-syntax let
+  (lambda (x)
+    (syntax-case x ()
+      ((_ ((var val) ...) body ...) (syntax ((lambda (var ...) body ...) val ...)))
+      ((_ label ((var val) ...) body ...) (syntax ((letrec ((label (lambda (var ...) body ...))) label) val ...))))))
+
+(define-syntax letrec
+  (lambda (x)
+    (syntax-case x ()
+      ((_ ((var val) ...) body ...)
+       (syntax (let ((var (rp:void)) ...) (set! var val) ... (let-syntax () body ...)))))))
+
+(define-syntax let*
+  (lambda (x)
+    (syntax-case x ()
+      ((_ () e ...) (syntax (let () e ...)))
+      ((_ ((var val) ...) e ...)
+       (letrec ((pbl (lambda (bl)
+		       (syntax-case bl ()
+			 (((var val)) (syntax (let ((var val)) e ...)))
+			 (((var val) bp ...)
+			  (with-syntax ((tl (pbl (syntax (bp ...)))))
+			    (syntax (let ((var val)) tl))))))))
+	 (pbl (syntax ((var val) ...))))))))
+
+(define-syntax cond
+  (lambda (x)
+    (define (pcl cl)
+      (syntax-case cl ()
+	(() (syntax (rp:void)))
+	(((e)) (syntax e))
+	((c0 c1 ...)
+	 (with-syntax ((tl (pcl (syntax (c1 ...)))))
+	   (syntax-case (syntax c0) (else =>)
+	     ((else e ...) (syntax (begin e ...)))
+	     ((e) (syntax (let ((t e)) (if t t tl))))
+	     ((e => f) (syntax (let ((t e)) (if t (f t) tl))))
+	     ((c e ...) (syntax (if c (begin e ...) tl)))
+	     (_ (syntax-error (syntax c0) "illegal cond clause")))))))
+    (syntax-case x ()
+      ((_ c ...) (pcl (syntax (c ...)))))))
+
+(define-syntax case
+  (lambda (x)
+    (define (pcl cl)
+      (syntax-case cl ()
+	(() cl)
+	((c0 c1 ...)
+	 (with-syntax (((tl ...) (pcl (syntax (c1 ...)))))
+	   (syntax-case (syntax c0) (else)
+	     ((else e ...) (syntax (c0)))
+	     (((k ...) e ...) (syntax (((rp:memv t '(k ...)) e ...) tl ...)))
+	     (_ (syntax-error (syntax c0) "illegal case clause")))))))
+    (syntax-case x ()
+      ((_ kv c ...)
+       (with-syntax (((cc ...) (pcl (syntax (c ...)))))
+	 (syntax (let ((t kv)) (cond cc ...))))))))
+
+(define-syntax and
+  (lambda (x)
+    (define (pal al)
+      (syntax-case al ()
+	((e) (syntax e))
+	((e f ...)
+	 (with-syntax ((tl (pal (syntax (f ...)))))
+	   (syntax (if e tl #f))))))
+    (syntax-case x ()
+      ((_) (syntax #t))
+      ((_ e ...) (pal (syntax (e ...)))))))
+
+(define-syntax or
+  (lambda (x)
+    (define (pol ol)
+      (syntax-case ol ()
+	((e) (syntax e))
+	((e f ...)
+	 (with-syntax ((tl (pol (syntax (f ...)))))
+	   (syntax (let ((t e)) (if t t tl)))))))
+    (syntax-case x ()
+      ((_) (syntax #f))
+      ((_ e ...) (pol (syntax (e ...)))))))
+
+(define-syntax do
+  (lambda (x)
+    (define (pvl vl)
+      (syntax-case vl ()
+	(() (syntax (() () ())))
+	(((var init) vs ...)
+	 (with-syntax ((((v ...) (i ...) (s ...)) (pvl (syntax (vs ...)))))
+	   (syntax ((var v ...) (init i ...) (var s ...)))))
+	(((var init step) vs ...)
+	 (with-syntax ((((v ...) (i ...) (s ...)) (pvl (syntax (vs ...)))))
+	   (syntax ((var v ...) (init i ...) (step s ...)))))
+	((c vs ...) (syntax-error (syntax c) "illegal do variable spec"))))
+    (define (rf el)
+      (syntax-case el ()
+	(() (syntax (rp:void)))
+	((e ...) (syntax (begin e ...)))))
+    (syntax-case x ()
+      ((_ (vs ...) (e0 e1 ...) b ...)
+       (with-syntax ((((v ...) (i ...) (s ...)) (pvl (syntax (vs ...))))
+		     (r (rf (syntax (e1 ...)))))
+	 (syntax (letrec ((loop (lambda (v ...) (if e0 r (begin b ... (loop s ...)))))) (loop i ...))))))))
+
+(define-syntax quasiquote
+  (lambda (x)
+    (define (docons x y)
+      (with-syntax ((x x))
+	(syntax-case y (quote rp:list rp:cons rp:append)
+	  ('() (syntax (rp:list x)))
+	  ((rp:list e ...) (syntax (rp:list x e ...)))
+	  ((rp:cons a b) (doappend (syntax (rp:list x a)) (syntax b)))
+	  ((rp:append a b ...) (doappend (docons (syntax x) (syntax a)) (syntax (rp:append b ...))))
+	  (e (syntax (rp:cons x e))))))
+    (define (doappend x y)
+      (syntax-case x (rp:append)
+	((rp:append e) (doappend (syntax e) y))
+	((rp:append e0 e1 ...) (doappend (syntax e0) (doappend (syntax (rp:append e1 ...)) y)))
+	(x (syntax-case y (quote rp:append)
+	     ('() (syntax x))
+	     ((rp:append e ...) (syntax (rp:append x e ...)))
+	     (e (syntax (rp:append x e)))))))
+    (define (dovector x)
+      (syntax-case x (quote rp:list)
+	('() (syntax (rp:vector)))
+	((rp:list e ...) (syntax (rp:vector e ...)))
+	(e (syntax (rp:apply rp:vector e)))))
+    (define (qq level pat)
+      (syntax-case pat (quasiquote unquote unquote-splicing)
+	((quasiquote p) (docons (syntax 'quasiquote) (qq (rp:cons #t level) (syntax (p)))))
+	((unquote p)
+	 (if (rp:null? level) (syntax p) (docons (syntax 'unquote) (qq (rp:cdr level) (syntax (p))))))
+	(((unquote-splicing p) . pd)
+	 (if (rp:null? level)
+	   (doappend (syntax p) (qq level (syntax pd)))
+	   (docons (docons (syntax 'unquote-splicing) (qq (rp:cdr level) (syntax (p)))) (qq level (syntax pd)))))
+	((pa . pd) (docons (qq level (syntax pa)) (qq level (syntax pd))))
+	(#(p ...) (dovector (qq level (syntax (p ...)))))
+	(p (syntax 'p))))
+    (syntax-case x ()
+      ((_ p) (qq '() (syntax p))))))
+
+(define-syntax rp:catch-error
+  (lambda (x)
+    (syntax-case x ()
+      ((_ h e ...) (syntax (rp:call-with-error-handler h (lambda () e ...)))))))
+
+(define-syntax delay
+  (lambda (x) (syntax-case x () ((_ e) (syntax (rp:make-promise (lambda () e)))))))
+
+(define-syntax rp:load-into-compiler-environment
+  (lambda (x) (syntax-case x () ((_ f) (syntax (rp:eval-in-compiler-environment (load f)))))))
+
+(define-syntax rp:exception
+  (lambda (x)
+    (syntax-case x ()
+      ((_ (type arg ...) mproc)
+       (identifier? (syntax type))
+       (syntax (lambda (arg ...)
+		 (rp:error 109
+		   (rp:list 'type
+		     (lambda (port arg ...) (mproc port))
+		     arg ...))))))))
+
+(define-syntax rp:dispatch-exception
+  (lambda (x)
+    (define (conv-clause cl)
+      (syntax-case cl
+	(rp:os-error rp:read-syntax-error rp:eof-error rp:storage-error rp:overflow-error rp:div0-error rp:ldso-error
+	 rp:eval-error rp:var-unbound-error rp:apply-error rp:arg-error rp:primitive-error rp:excess-formal-error
+	 rp:arg-count-error rp:define-error rp:exception-error rp:map-error
+	 rp:eval-procedure-error rp:busy-port-error rp:port-procedure-error rp:read-only-var-error default)
+	(((rp:os-error errno) action ...)
+	 (syntax ((rp:eqv? errcode 1) (let ((errno errobj)) action ...))))
+	(((rp:read-syntax-error message) action ...)
+	 (syntax ((rp:eqv? errcode 2) (let ((message errobj)) action ...))))
+	(((rp:eof-error) action ...) (syntax ((rp:eqv? errcode 3) action ...)))
+	(((rp:storage-error) action ...) (syntax ((rp:eqv? errcode 4) action ...)))
+	(((rp:overflow-error) action ...) (syntax ((rp:eqv? errcode 5) action ...)))
+	(((rp:div0-error) action ...) (syntax ((rp:eqv? errcode 6) action ...)))
+	(((rp:ldso-error message) action ...)
+	 (syntax ((rp:eqv? errcode 7) (let ((message errobj)) action ...))))
+	(((rp:eval-error obj) action ...)
+	 (syntax ((rp:eqv? errcode 101) (let ((obj errobj)) action ...))))
+	(((rp:var-unbound-error var) action ...)
+	 (syntax ((rp:eqv? errcode 102) (let ((var errobj)) action ...))))
+	(((rp:apply-error obj) action ...)
+	 (syntax ((rp:eqv? errcode 103) (let ((obj errobj)) action ...))))
+	(((rp:arg-error) action ...) (syntax ((rp:eqv? errcode 104) action ...)))
+	(((rp:primitive-error exp) action ...)
+	 (syntax ((rp:eqv? errcode 105) (let ((exp errobj)) action ...))))
+	(((rp:excess-formal-error) action ...) (syntax ((rp:eqv? errcode 106) action ...)))
+	(((rp:arg-count-error) action ...) (syntax ((rp:eqv? errcode 107) action ...)))
+	(((rp:define-error) action ...) (syntax ((rp:eqv? errcode 108) action ...)))
+	(((rp:exception-error data) action ...)
+	 (syntax ((rp:eqv? errcode 109) (let ((data errobj)) action ...))))
+	(((rp:map-error) action ...) (syntax ((rp:eqv? errcode 110) action ...)))
+	(((rp:eval-procedure-error) action ...) (syntax ((rp:eqv? errcode 111) action ...)))
+	(((rp:busy-port-error) action ...) (syntax ((rp:eqv? errcode 112) action ...)))
+	(((rp:port-procedure-error) action ...) (syntax ((rp:eqv? errcode 113) action ...)))
+	(((rp:read-only-var-error var) action ...)
+	 (syntax ((rp:eqv? errcode 114) (let ((var errobj)) action ...))))
+	(((default code obj) action ...) (syntax (else (let ((code errcode) (obj errobj)) action ...))))
+	(((type arg ...) action ...)
+	 (identifier? (syntax type))
+	 (syntax ((and (rp:eqv? errcode 109) (rp:eqv? (rp:car errobj) 'type))
+		  (rp:apply (lambda (arg ...) action ...) (rp:cdr (rp:cdr errobj))))))
+	(_ (syntax-error cl "illegal exception spec"))))
+    (syntax-case x ()
+      ((_ code obj clause ...)
+       (with-syntax (((cc ...) (rp:map conv-clause (syntax (clause ...)))))
+	 (syntax (let ((errcode code) (errobj obj)) (cond cc ... (else (rp:error errcode errobj))))))))))
+
+(define-syntax rp:try-except
+  (lambda (x)
+    (syntax-case x ()
+      ((_ exp clause ...)
+       (syntax (rp:catch-error (lambda (err obj) (rp:dispatch-exception err obj clause ...)) exp))))))
+
+(define-syntax rp:locally
+  (lambda (x)
+    (syntax-case x ()
+      ((_ ((var val) ...) (cleanup ...) body ...)
+       (syntax (let ((var val) ...)
+		 (let ((cln (lambda v cleanup ... (rp:apply rp:values v))))
+		   (rp:call-with-values
+		     (lambda () (rp:call-with-error-handler
+				  (lambda (err obj) (cln) (rp:error err obj))
+				  (lambda () body ...)))
+		     cln))))))))
+
+(define rp:*macro-search-list*
+  (cons ""
+    (let ((str (rp:getenv (cm-macro-path-var)))
+	  (libpath (let ((libstr (rp:getenv (cm-lib-environment-var))))
+		     (if libstr (list libstr) '()))))
+      (if str
+	(let ((len (string-length str)))
+	  (letrec ((split-path (lambda (start)
+				 (let loop ((i start))
+				   (cond ((= i len) (cons (substring str start i) libpath))
+					 ((char=? (string-ref str i) (cm-list-separate-char))
+					  (cons (substring str start i) (split-path (+ i 1))))
+					 (else (loop (+ i 1))))))))
+	    (split-path 0)))
+	libpath))))
+
+(define (rp:search-file-from-list name)
+  (let ((nn (rp:string-append (rp:string (cm-path-separate-char)) name)))
+    (let loop ((dl rp:*macro-search-list*))
+      (if (rp:null? dl) name
+	(let ((fn (if (rp:zero? (rp:string-length (rp:car dl))) name (rp:string-append (rp:car dl) nn))))
+	  (if (rp:file-exists? fn) fn (loop (rp:cdr dl))))))))
+
+(define-syntax rp:use-macro-package
+  (lambda (x)
+    (syntax-case x ()
+      ((_ str)
+       (let ((file-name (rp:search-file-from-list (syntax-object->datum (syntax str)))))
+	 (with-syntax ((fn file-name))
+	   (syntax (rp:eval-in-compiler-environment (load fn)))))))))
+
+(define-syntax rp:fancy-string
+  (lambda (x)
+    (syntax-case x ()
+      ((_ part ...)
+       (rp:apply rp:string-append
+	 (rp:map (lambda (x)
+		   (let ((x (syntax-object->datum x)))
+		     (cond ((rp:string? x) x)
+			   ((rp:char? x) (rp:make-string 1 x))
+			   ((and (rp:number? x) (rp:exact? x) (rp:integer? x))
+			    (rp:make-string 1 (rp:integer->char x)))
+			   (else (syntax-error x "illegal type of component")))))
+		 (syntax (part ...))))))))
+
+(define-syntax rp:asciz
+  (lambda (x)
+    (syntax-case x ()
+      ((_ s) (syntax (rp:fancy-string s 0))))))
+
+(define-syntax rp:ifndef
+  (lambda (x)
+    (syntax-case x ()
+      ((_ sym then) (syntax (rp:ifndef sym then (rp:void))))
+      ((_ sym then else)
+       (if (rp:symbol-bound? (syntax-object->datum (syntax sym))) (syntax else) (syntax then))))))
+
+(define-syntax rp:define-generic
+  (lambda (x)
+    (syntax-case x ()
+      ((_ (name this . args))
+       (syntax (define name (rp:generic-procedure (rp:no-method 'name)))))
+      ((_ (name this . args) exp ...)
+       (syntax (define name (rp:generic-procedure (lambda (this . args) exp ...))))))))
+
+(define-syntax rp:object-constructor
+  (lambda (x)
+    (define (mk-method-list msgs procs)
+      (let loop ((l '()) (m msgs) (p procs))
+	(if (rp:null? m) l
+	  (loop (rp:cons (rp:car m) (rp:cons (rp:car p) l))
+		(rp:cdr m) (rp:cdr p)))))
+    (syntax-case x ()
+      ((_ ((basis obj) ...) ((msg this . arg) exp ...) ...)
+       (with-syntax ((methods (mk-method-list (syntax (msg ...))
+					      (syntax ((lambda (this . arg) exp ...) ...)))))
+	 (syntax (let ((basis obj) ...) (rp:make-object (rp:list basis ...) . methods))))))))
+
+(define-syntax rp:lambda-with-options
+  (lambda (x)
+    (syntax-case x ()
+      ((_ (arg ...) ((key defv) ...) body ...)
+       (syntax (let ((keywords (rp:list 'key ...))
+		     (defaults (rp:list defv ...)))
+		 (lambda (arg ... . rest)
+		   (rp:apply (lambda (key ...) body ...)
+			     (rp:get-options rest keywords defaults)))))))))

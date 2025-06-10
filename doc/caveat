@@ -1,0 +1,22 @@
+$Id: caveat,v 1.3 1999/02/15 08:58:42 qfwfq Exp $
+
+Identifiers beginning with `rp:' are reserved to system. If value of such
+variables with no description in document are refered or value of such
+variables are changed, the effect is unpreditable.
+
+If allocation of memory necessary for rearrange heap failed, pi will terminate
+abnormally. If it is impassoble to estimate amount of heap usage and abnormal
+termination is not permitted, some consideration is required, such as doing a
+checkpoint dump occasionally and restart program by some external machanism
+(shell script, in example.)
+
+The following problem arises in Cygwin b19.1 environment.
+  Char-ready? does not work properly.
+
+The following problem arises in win32 environment if compiled with Borland C++.
+  Some behaviors in floating point operations are not that the author intended,
+  in example, nonsense finite value results from evaluation of (atan +i).
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

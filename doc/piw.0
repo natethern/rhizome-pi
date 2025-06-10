@@ -1,0 +1,66 @@
+
+
+
+PIW(1)                                                     PIW(1)
+
+
+NNAAMMEE
+       piw - A Win32 Scheme Interpreter
+
+SSYYNNOOPPSSIISS
+       ppiiww [ _f_i_l_e ] [ _a_r_g_u_m_e_n_t_s ]
+
+DDEESSCCRRIIPPTTIIOONN
+       Piw is a scheme interpreter.  This differs from pi only in
+       the following points.
+
+       Piw is built as GUI application  while  pi  is  a  console
+       application.   Refer to the explanation of -windows option
+       in pisl.
+
+       Into piw,  library  for  making  windows  application  (ww
+       library) is linked.
+
+AAUUTTHHOORR
+       INUJIMA Masaru (qfwfq@kt.rim.or.jp).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            Rhizome/pi                          1
+
+

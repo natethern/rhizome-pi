@@ -1,0 +1,66 @@
+
+
+
+PI(1)                                                       PI(1)
+
+
+NNAAMMEE
+       pi - A Scheme Interpreter
+
+SSYYNNOOPPSSIISS
+       ppii [ _f_i_l_e ] [ _a_r_g_u_m_e_n_t_s ]
+
+DDEESSCCRRIIPPTTIIOONN
+       Pi executes ordinary read-eval-print loop if invoked with-
+       out any arguments.  It exits  when  expression  (exit)  is
+       evaluated.
+
+       If  invoked  with command line arguments, pi considers the
+       first argument as file name, and loads named  file  before
+       entering  read-eval-print  loop.  Subsequent arguments may
+       be used to give parameters to application program.  To get
+       command  line  arguments from program, use global variable
+       *invocation-arg* or procedure rp:command-line-arguments.
+
+       Using "--" as the first argument means invoke pi  interac-
+       tively,  while  giving  parameters  according to remaining
+       arguments.
+
+       If pi is invoked interactively, content of the environment
+       variable  RHIZOME_PI_RC is evaluated, if it is set, before
+       entering read-eval-print loop.
+
+EENNVVIIRROONNMMEENNTT
+       RHIZOME_PI_RC
+              Startup command for interactive use of pi.
+
+AAUUTTHHOORR
+       INUJIMA Masaru (qfwfq@kt.rim.or.jp).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            Rhizome/pi                          1
+
+

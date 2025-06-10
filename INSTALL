@@ -1,0 +1,211 @@
+$Id: INSTALL,v 1.12 2005/11/10 08:46:05 qfwfq Exp $
+
+; GO32 environment is not supported. Regard directives such as '#ifdef GO32'
+; scattered around sources as ancient monuments :-)
+
+1.  Common installation procedure.
+
+  Files to be changed according to environments are placed under directory
+  config. Select suitable sub directory and copy files in it to appropriate
+  place, and edit its contents if neccessary.
+
+	config/unix/		Settings for unix (unix like OS's)
+	 config/unix/full	Normal settings for *BSD
+	 config/unix/linux	Settings for linux
+	 config/unix/static	Settings without shared libraries
+	 config/unix/piconly	Used if -fpic compiler option makes no sense
+	config/win32/		Settings for Win32
+	 config/win32/cygwin	Cygwin
+	 config/win32/msc	Microsoft compiler
+	 config/win32/bc	Borland compiler
+	 config/win32/lcc	lcc-win32
+	config/beos/		Settings for BeOS (not tested lately)
+	 config/beos/intel	Intel version
+
+  Each direcotry contains the following files.
+
+	File name		Copy destination
+	--------		--------
+	rhiz_cnf.h		include/rhiz_cnf.h
+	Makefile.kappa		kappa/Makefile
+	Makefile.pi		pi/Makefile
+	Makefile.pi.compiler	pi/compiler/Makefile
+	config.scm		pi/compiler/config.scm
+
+  With these files prepared, invoke make (or corresponding tool for your
+  environment) in the directory pi. Do "make install" to install files into
+  run time environment. Install destinations are specified at the top of
+  pi/Makefile. Destination directories must already exist befor doing this.
+
+2. Contents of each files.
+
+ a) rhiz_cnf.h -> include/rhiz_cnf.h
+
+  RK_HEAP_CHUNK_SIZE
+  RK_BULK_ALLOC_THRESHOLD
+  RK_EVAL_REGISTER_SIZE
+
+    You should not need to change them.
+
+  RK_OLD_SYSV_SIGNAL
+
+    Define according to specification of signal(). If program gets killed
+    by hitting ctrl-C twice, you shoud define this. Conversely, if program
+    is not interrupted by hitting ctrl-C while waiting input, you should
+    undefine this.
+
+  RK_BSD_SETJMP
+
+    Define this if there exists BSD style _setjmp, _longjmp function.
+
+  RK_NO_IEEE754_SUPPORT
+
+    Define this if functions scalbn(), ilogb(), finte() are unavailable.
+    If defined, these functions are not used, but exact->inexact will
+    be slow. For reference,
+
+    	double scalbn(double x, int n)	returns x*(2^n)
+    	int ilogb(double x)		returns n such as 2^n <= x < 2^(n+1)
+    	int finite(double x)		1 if x is an finite number, 0 otherwise
+
+  RK_HAS_FINITE
+
+    Define this if you need to define RK_NO_IEEE754_SUPPORT above, but the
+    function finite() exists.
+
+  RK_PERSISTENT_ALLOC_SIZE
+  RK_PERSISTENT_ALLOC_BASE
+
+    You should not need to change them (refered only in WIN32.)
+
+  RK_MALLOC_NO_PAGE_ALIGN
+
+    Define this if malloc() may return address which is not page aligned
+    even if requested size is equal or larger than page size. Defining this
+    may fix immediate error on startup (core dump or Dr. Watson.)
+
+  RK_USE_LOCALE
+
+    Define this to use mblen() to check double byte character in environments
+    other than WIN32.
+
+  RK_USE_MMAP
+
+    Define this if your unix like system has mmap() system call.
+
+  RK_FUNCTIONS_ALIGNED
+
+    Expect function adresses are aligned and use it to distinguish whether
+    values are function pointers or not in some situations.
+
+  RK_LDSO_DLFCN
+
+    Undefine this if dlopen() is not available. Undefining this disables
+    support of dynamic loading of shared object. See ldso.c for details.
+    Ignored on WIN32.
+
+  RK_NO_LEADING_UNDERSCORE
+
+    Undefine this if underscore is added to each exported symbol name in
+    shared objects.
+
+  RK_JB_I386BSD
+  RK_JB_PTHREAD
+
+    Define one of these to select method of how to call functions in
+    dynamically loaded shared objects. See ldso.c for details.
+    Ignored on WIN32.
+    If RK_JB_I386BSD is defined, it is assumed that processor architecture
+    is Intel x86 family and layout of jmp_buf is same to that in xBSD code.
+    If RK_JB_PTHREAD is defined, pthread functions are used. In this case,
+    processor architecture must also specified (see below.)
+    If none of these are defined, this facility is disabled.
+
+  RK_ARCH_I386
+
+    Define this to specify processor architecture when RK_JB_PTHREAD above
+    is defined.
+
+  RK_W_XOR_X
+
+    Define this if OS has W^X feature.
+
+  index
+
+    Define to strchr if needed.
+
+ b) Makefile.kappa -> kappa/Makefile, Makefile.pi -> pi/Makefile
+
+  CDEBUGFLAGS	Options concerning optimization and debugging.
+  EXESUFFIX	Suffix added automagically to executable file name
+  CC		C compiler to use.
+  CFLAGS	Options for C compiler.
+  PIC_CFLAGS	Options for C compiler to make objects for shared library.
+  LDFLAGS	Options for linker.
+  AR		Name of librarian program.
+  RANLIB	Name of ranlib program (define to : or such if not applicable.)
+  SYSLIBS	Additional libraries need to be linked.
+
+  BASEDIR	Base of installation target directory.
+  BINDIR	Directory to which executables are installed.
+  LIBDIR	Directory to which headders and libraries are installed.
+  SHLIBDIR	Directory to which shared libraries are installed.
+
+ c) Makefile.pi.compiler -> pi/compiler/Makefile
+
+  EXESUFFIX	Same as above.
+  AOUT		File name of linker output when executable file name is not
+  		specified.
+  LIBS		Libraries to be built.
+  SHLIB		Shared libraries to be built.
+  PROGS		Executables to be built.
+  INSTAMACRO	Additional target for installation.
+  PISCAUX	Additional modules to be linked in compilers.
+  PIWAUX	Additional modules to be linked in windows interpreter.
+  RANLIB	Same as above.
+  SYSLIBS	Additional libraries.
+		Put -aux first because this is option for pisl.
+  LIB_PISLFLAGS	Option to pisl when creating library modules.
+  PIC_PISLFLAGS	Option to pisl when creating shared library modules.
+  APP_PISLFLAGS	Option to pisl when creating application modules.
+  AR		Name of librarian program.
+  LD		Name of linker which generates shared library.
+  LIBBASE	Options for linker to specify base address of DLL.
+
+ d) config.scm -> pi/compiler/config.scm
+
+  cm-path-separate-char	Directory separator character in path names.
+  cm-list-separate-char	Character used to separate elements of search paths.
+  cm-always-static	Expand to #f if shares runtime works.
+  cc-command-str	Command line string of C compiler.
+  cm-cc-command		Use this as hook if cc-command-str is not sufficient.
+  cm-cc-line		Use this as hook even if cm-cc-command is insufficient.
+  ld-command-str	Command line string of linker.
+  cm-ld-command		Use this as hook if ld-command-str is not sufficient.
+  ld-lib-str		Library specification passed to linker.
+  cm-ld-lib		Use this as hook if ld-lib-str is not sufficient.
+  cm-add-base-option	Linker option correnponds to pisl's -base option.
+  output-option-str	Option for linker to specify name of executable file.
+  cm-add-output-option	Use this as hook if output-option-str is not sufficient.
+  obj-suffix-str	Suffix of object file.
+  cm-add-module		Use this as hook if obj-suffix-str is not sufficient.
+  cm-default-exe-suffix	Suffix of executable/shared object file name, #f for
+			none.
+  cm-exit-status	Expression to get exit status from the value of system.
+  cm-platform-id	List which (rp:identify-platform) will return.
+  cm-lib-environment-var Name of environment variable that will point to the
+  			directory in which headers and libraries reside.
+  cm-macro-path-var	Name of environment variable that specifies macro
+			package search path.
+  cm-startup-cmd-var	Name of environment variable that specifies auto
+			execution command on interpreter startup.
+  cm-sigint-no		Value of SIGINT in signal.h.
+
+3.  Environment settings at run time.
+
+  Assign path name of directory to which haders and libraries are installed
+  to the environment valiable RHIZOME_LIB.
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

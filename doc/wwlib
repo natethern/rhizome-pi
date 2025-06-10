@@ -1,0 +1,757 @@
+$Id: wwlib,v 1.3 1999/06/15 08:01:30 qfwfq Exp $
+
+1. Linking library
+
+  All procedures and syntaxes discussed in this document are already included
+  in piw. Thus, no special operation is needed for running programs on piw.
+  Pisc and pisf includes only syntaxes below, so no special operation is needed
+  for compilation also. To produce executable by linking compiled modules,
+  some of following library modules must be linked together.
+
+  Below is the list of module names and its functionalities.
+	rp_wwsyn	Definition of syntaxes.
+	rp_wwutl	Utility procedures used in other modules.
+	rp_wwapi	Definitions of commonly used Win32 API.
+	rp_wwbas	Basic procedures.
+	rp_wwui		Procedures to handle menus, dialogs and such.
+	rp_wwdlg	Common dialogs concerning with files and printing.
+	rp_wwtrm	Terminal window.
+  Normally, compiled application does not need rp_wwsyn (it is already linked
+  into pisc and pisf). Most applications needs rp_wwutl, rp_wwapi, rp_wwbas
+  and they must be linked in this order. Remaining modules rp_wwui, rp_wwdlg,
+  rp_wwtrm is needed when procedures in corresponding sections below are used.
+  Entities of these modules are included in runtime DLL, so normally no
+  additional object files are needed. To make executable which runs without
+  runtime DLL (-static linking), these modules must be extracted from
+  additional library rhzww.lib (librhzww.a for cygwin).
+
+  For example, to make application myapp.exe by linking user module myapp which
+  uses rp_wwui and rp_wwdlg, do the following.
+
+	pisl -o myapp -windows -xm debugger \
+		rp_wwutl: rp_wwapi: rp_wwbas: rp_wwui: rp_wwdlg: myapp
+
+  And to link statically, do the following.
+
+	pisl -static -o myapp -windows -xm debugger -aux rhzww.lib \
+		rp_wwutl: rp_wwapi: rp_wwbas: rp_wwui: rp_wwdlg: myapp
+
+  In cygwin environment, replace '-aux rhzww.lib' by '-aux -lrhzww'.
+  Currently, only debugger can be ommitted among basic modules.
+
+2. Calling API
+
+  Win32 APIs which are used in other parts of library or conciderd as be used
+  in almost all applications are defined in rp_wwapi. They are named from their
+  original name of entry by converting according to following rules.
+
+  a) Regard text beginning with captal and followed by small letters as a word.
+    Insert hyphen between words. As exception, contiguous capitals like 'DC'
+    are regarded as word.
+  b) Use only ANSI version if API has both ANSI and UNICODE versions. Trailing
+    'A' is not regarded as a part of name.
+  c) Make procedure name on Scheme by adding 'rp:win32api-' to top.
+
+  Example: CreateWindowExA => rp:win32api-create-window-ex
+	   GetDC => rp:win32api-get-dc
+
+  APIs which are not defined in rp_wwapi can be defined by following syntaxes.
+
+(rp:ww-load-system-dll id name)					syntax
+  Load module including API in subject and name its handle. Id is a symbol and
+  becomes the name of handle. Name is a string naming the module.
+
+(rp:ww-load-api-entry name dll entry return-type (argument-type ...))	syntax
+(rp:ww-book-api-entry name dll entry return-type (argument-type ...))	syntax
+  Define API procedure. Name is a symbol which specifies the name of procedure
+  in Scheme and the symbol augmented by 'rp:win32api-' becomes name of defined
+  procedure. Dll specifies module which includes the API by the symbol used in
+  previously executed rp:ww-load-system-dll. Entry is a name of API specified
+  by string. Return-type and argument-type ... are types of return value and
+  arguments specified in the same manner as in rp:entry->procedure.
+
+  Rp:ww-load-api-entry and rp:ww-book-api-entry have identical syntax and
+  functionality. Rp:ww-load-api-entry loads desired entry immediately, while
+  using rp:ww-book-api-entry, loading of entry is done only when defined
+  procedure is invloked first time. To define API used in application, use
+  rp:ww-load-api-entry. Use rp:ww-book-api-entry if you want to define APIs
+  exhaustively disregarding whether each API is used or not.
+
+  If (rp:dbg-set-flag 'rp:ww-api-arg #t) is in effect when rp:ww-load-api-entry
+  macro is expanded or procedure defined by rp:ww-book-api-entry is first
+  invoked, defined procedure is made to do type check before actually issueing
+  API call. In this case, when argument of wrong type is passed, error of type
+  (rp:ww-api-arg-error name index type value) is generated. Name is the name of
+  procedure, index of index of argument which has wrong type, type is type name
+  the argument must be of and value is the value of passed argument.
+
+  DLLs below are loaded already in rp_wwapi, so they can be used in
+  rp:ww-load-api-entry and rp:ww-book-api-entry without explicitly loading.
+	(rp:ww-load-system-dll kernel "kernel32.dll")
+	(rp:ww-load-system-dll user "user32.dll")
+	(rp:ww-load-system-dll gdi "gdi32.dll")
+	(rp:ww-load-system-dll comdlg "comdlg32.dll")
+
+  Many APIs are accompanied with relating definitions of constants and
+  structures to be used with them. Many definitions of constants and structures
+  adjunct to APIs included in rp_wwapi are installed in library directory so
+  they can be loaded using rp:use-macro-package. Naming convention for them
+  is as following.
+
+  a) Replace underscore charecter with hyphen.
+  b) Augment prefix 'win:' to names of structures. If element name has prefix
+    comming from Hungerian notaion, remove it.
+  c) Group constants with common prefixes delimited by underscore and
+    the common prefix augmented by 'win:' becomes the name of constants or
+    flag set. Remove the common prefix from each constant names and make them
+    elements of constants or flag set. Flag set 'win:' is defined for constants
+    without common prefix.
+
+  Example: IDOK => (win: iodk)
+	   WS_OVERWRAPPEDWINDOW => (win:ws overlappedwindow)
+	   POINT => win:point (Elements are x and y.)
+
+  To find out which file have the definition of desired constants and
+  structures, consult to source files in pi/win32/win32mcr.
+
+3. Procedures with options
+
+  Some procedures duscussed below take option arguments. It is indicated by
+  argument list in synopsis ending with 'option ...'.
+  To specify value of option when calling them, list symbol of option name
+  and corresponding value alternatively. Of cource, all option name arguments
+  are evaluated because they are arguments of procedure call. So normally
+  they are quoted.
+
+  If undefined option is specified, error of type (rp:no-option opt) arises.
+  Opt is the undefined option in concern. Same error arrises when identical
+  option is specified more than once.
+
+4. Errors
+
+(rp:ww-windows-error [errcode])					procedure
+  Generate error of type (rp:ww-windows-error errcode errdesc). If errcode is
+  not specified, it defaults to the return value of GetLastError. Errdesc is
+  error message string corresponding to errcode.
+
+5. Window classes and window procedures
+
+(rp:ww-make-window-class dispatcher option ...)			procedure
+	[option]			[default]
+	style		style		0
+	cls-extra	cbClsExtra	0
+	wnd-extra	cbWndExtra	0
+	instance	hInstance	hInstance of process
+	icon		hIcon		IDI_APPLICATION
+	cursor		hCursor		IDC_ARROW
+	background	hbrBackground	COLOR_WINDOW
+	menu-name	lpszMenuName	NULL
+	class-name	lpszClassName	Generated internally
+	icon-sm		hIconSm		NULL
+  Registers window class. Use return value of this procedure as an argument of
+  rp:ww-create-window. Dispatcher describes window procedure and this is
+  generated by rp:ww-message-dispatcher discussed next. As a value of option
+  like icon, specify handle of resource of appropriate type. Each value of
+  option gives corresponding element of WNDCLASSEX structure.
+
+(rp:ww-message-dispatcher (wnd message wparam lparam)
+  (msg exp ...) ...)						syntax
+  Generate window procedure description which can be used as argument of
+  rp:ww-make-window-class. Arguments of window procedure is bound to wnd,
+  message, wparam, lparam and these binding is visible in each exp.
+  Msg specifies message and exp's in selected clause are eveluated.
+  Inside this syntax, following procedures rp:ww-set-user-data,
+  rp:ww-get-user-data and rp:ww-delete-user-data are available.
+  For message without matching clause, DefWindowProc will be called.
+
+(rp:ww-set-user-data wnd lparam)				procedure
+  Defined locally in rp:ww-message-dispatcher. This can be used only to
+  process WM_NCCREATE or WM_CREATE message. Pass wnd and lparam of
+  rp:ww-message-dispatcher as arguments. After this procedure is called,
+  rp:ww-get-user-data procedure become available in subsequent processing of
+  messages.
+
+(rp:ww-get-user-data wnd)					procedure
+  Defined locally in rp:ww-message-dispatcher. Before using this procedure,
+  rp:ww-set-user-data must be called in responce to WM_NCCREATE or WM_CREATE
+  message. To use this procedure in processing of messages sent before
+  WM_CREATE message is sent, call rp:ww-set-user-data in responce to
+  WM_NCCREATE message. Notice that WM_GETMINMAXINFO is sent even before
+  WM_NCCREATE is sent. Argument wnd is wnd variable of
+  rp:ww-message-dispatcher. This procedure returns the object specified as
+  data argument of rp:ww-create-window.
+
+(rp:ww-delete-user-data wnd)					procedure
+  Defined locally in rp:ww-message-dispatcher. Usually this procedure is called
+  in responce to WM_NCDESTROY or WM_DESTROY message. Call this procedure only
+  when rp:ww-set-user-data is called. Argument wnd is wnd variable of
+  rp:ww-message-dispatcher. This procedure frees resource reserved for process
+  rp:ww-get-user-data procedure.
+
+(rp:ww-replace-window-procedure wnd dispatcher)			procedure
+  Replaces window procedure of window wnd (that is, does so-called instance
+  subclassing). Dispatcher describes new window procedure and generated by
+  rp:ww-subclass-dispatcher discussed below.
+
+(rp:ww-replace-class-procedure class dispatcher)		procedure
+  Replaces window procedure of class with name class (that is, does so-called
+  global subclassing). Specify class as string. Dispatcher describes new
+  window procedure and generated by rp:ww-subclass-dispatcher discussed below.
+
+(rp:ww-make-derived-class oclass nclass dispatcher option ...)	procedure
+	[option]					[default]
+	instance	Instance which owns oclass.	NULL
+	modify-class	Procedure to modify class.	Does nothing.
+  Create new window class with name nclass besed upon existing class with name
+  oclass (that is, does so-called superclassing). Dispatcher describes new
+  window procedure and generated by rp:ww-subclass-dispatcher discussed below.
+  If base class is created by some module, pass its instance handle as the
+  value of instance option. If base class is a system control class, instance
+  option is not necessary. To modify characteristics of class other than
+  window procedure, specify option modify-class. Value of this option is
+  procedure with one argument and called with WNDCLASSEX structure just before
+  RegisterClassEx is called.
+
+(rp:ww-subclass-dispatcher (wnd message wparam lparam)
+  (msg exp ...) ...)						syntax
+  Generate window procedure description for subclassing. Inside this syntax,
+  following procedure rp:ww-call-base-procedure is available. For massages
+  without matching clause, window procedure of original class will be called.
+
+(rp:ww-call-base-procedure wnd message wparam lparam)		procedure
+  Defined locally in rp:ww-subclass-dispatcher. Calls window procedure of
+  original class.
+
+(rp:ww-command-dispatcher (wnd id cmd ctl udat)
+  (((sel ...) code) exp ...) ...)				syntax
+  Describe processing of WM_COMMAND. This expression itself is evaluated to
+  procedure,say proc, shall be called as (proc wnd wparam lparam udat).
+  Arguments wnd, wparam, lparam are arguments of window procedure as is and
+  udat may be arbitrarly value.
+  Evaluates exp's in the clause to which specification of sel and code
+  processed command matches. In exp, variables wnd, id, cmd, ctl, udat are
+  bound. Wnd and udat are arguments of calling form, id and cmd are
+  control/menu ID and notification code given by splitting wparam, ctl is
+  handle of control given by type casting of lparam.
+  By (sel ...), control/menu ID is selected. If hyphen appears in this list,
+  range of ID values are selected. Notify code is selected by code and '*'
+  indecates all code will match. The clause which both condition matches is
+  selected.
+
+6. Windows
+
+(rp:ww-create-window class title data option ...)		procedure
+	[option]			[default]
+	exstyle		dwExStyle	0
+	style		dwStyle		WS_OVERWRAPPEDWINDOW
+	x		x		CW_USEDEFAULT
+	y		y		0
+	width		nWidth		CW_USEDEFAULT
+	height		nHeight		0
+	parent		hWndParent	NULL
+	menu		hMenu		NULL
+	instance	hInstance	hInstance of process
+	show		nCmdShow	SW_SHOWDEFAULT
+  Create window. Class is a object generated by rp:ww-make-window-class,
+  title is a string which will be text of window, data may be arbitrarly
+  abject and will be value of rp:ww-get-user-data in window procedure.
+  If value other than #f is specified for show option, ShowWindow is called
+  passing the value as nCmdShow argument. Other options specify corresponding
+  arguments of CreateWindowEx.
+
+(rp:ww-create-child-window
+  class style x y width height parent id option ...)		procedure
+	[option]			[default]
+	exstyle		dwExStyle	0
+	text		lpWindowName	""
+	instance	hInstance	プロセスの hInstance
+	param		lpParam		0
+  Create child window. Arguments and options specify arguments of
+  CreateWindowEx. WS_CHILD class option is applied always.
+
+7. Message loop
+
+(rp:ww-message-loop-create [body])				procedure
+  Generate message loop object. Message loop of application is handled through
+  this object. If body is specified, it must be prcedure of one argument and
+  called with MSG structure as argument. Default is calling TranslateMessage
+  and DispatchMessage sequencially. This object has following methods.
+
+(rp:ww-message-loop-add-dialog this dlg)			method
+  Add dlg to the list of dialog handles which is subject to IsDialogMessage.
+
+(rp:ww-message-loop-remove-dialog this dlg)			method
+  Remove dlg from the list of dialog handles which is subject to
+  IsDialogMessage.
+
+(rp:ww-message-loop-set-accelerator this accel wnd)		method
+  Specify accelerator table accel and window wnd as subjects to
+  TranslateAccelerator. Calling this method with #f as accel makes message loop
+  not to use accelerator table.
+
+(rp:ww-message-loop-process-one-message this msg)		method
+  Process message in message structure MSG. Normally, calls IsDialogMessage
+  for each registered dialog boxes, if all of them returns zero, calls
+  TranslateAccelerator for registered accelerator table and window, if this
+  also resurned zero, calls body specified when generating this.
+  If special message processing scheme is needed and specifying body does not
+  suffice, override this method.
+
+(rp:ww-message-loop-run this)					method
+  Execute message loop up to WM_QUIT arrives. Returns wparam of WM_QUIT
+  message.
+
+(rp:ww-message-loop-process-pending-messages this)		method
+  Execute message loop up to message queue becomes empty or WM_QUIT arrives.
+  Returns #f when message queue is empty and when WM_QUIT arrives, returns
+  its wparam parameter.
+
+(rp:ww-split-lparam lparam lo-signed? hi-signed? proc)		procedure
+(rp:ww-split-wparam wparam lo-signed? hi-signed? proc)		procedure
+  Splits lparam, wparam parameter to high and low word. Lo-signed? and
+  hi-signed? indicates whether each word should be considered as signed or
+  unsigned integer. Proc is a procedure of two arguments and called with
+  low word as first argument and high word as second argument. Returns value
+  of proc.
+
+(rp:ww-do-paint wnd ps proc)					procedure
+  Process WM_PAINT message. Wnd is a window in subject, ps is a PAINTSTRUCT
+  structure allocated by application, proc is a one argument procedure which
+  does rendering. Proc is called passing device context to be used for
+  rendering as argument.
+
+8. Menus
+
+To use procedure in this section, module rp_wwui must be linked.
+
+(rp:ww-make-menu menu-desc)					procedure
+  Create menu. Syntax of menu-desc is as follows.
+	menu-desc ::= (menu-item ...)
+	menu-item ::= (caption item-desc option-list)
+	caption ::= 'separator | string | ('bitmap bmp) | ('ownerdraw data)
+	bmp ::= bitmap-handle
+	data ::= integer
+	item-desc ::= id | submenu
+	id ::= integer
+	submenu ::= menu-desc
+	option-list ::= (option ...)
+	option ::= 'default | 'menubarbreak | 'menubreak | 'radiocheck
+		 | 'rightjustify | 'rightorder
+		 | ('checked flag) | ('enabled flag) | ('hilite flag)
+		 | ('checkmarks checked unchecked) | ('data item-data)
+		 | ('bitmap item-bitmap)
+	flag ::= #t | #f
+	checked ::= bitmap-handle
+	unchecked ::= bitmap-handle
+	item-data ::= integer
+	item-bitmap ::= bitmap-handle
+
+9. Accelerator tables
+
+To use procedures in this section, module rp_wwui must be linked.
+
+(rp:ww-make-accelerator-table table-desc)			procedure
+  Create accelerator table. Syntax of table-desc is as follows.
+	table-desc ::= (accel-item ...)
+	accel-item ::= (flags keycode id)
+	flags ::= (flag ...)
+	flag ::= 'virtkey | 'noinvert | 'shift | 'control | 'alt
+	keycode ::= integer
+	id ::= integer
+
+(rp:ww-destroy-accelerator-table acc-table)			procedure
+  Destroys accelerator table.
+
+10. Dialog boxes
+
+To use procedures in this section, module rp_wwui must be linked.
+
+(rp:ww-dialog-create template procedure option ...)		procedure
+	[option]			[default]
+	instance	hInstance	プロセスの hInstance
+  Create dialog box object. Template is generated by rp:ww-make-dialog-template
+  and procedure is generated by rp:ww-dialog-dispatcher, both are discussed
+  later. This object has following methods.
+
+(rp:ww-dialog-destroy this)					method
+  Destroys dialog box object and frees used resources.
+
+(rp:ww-dialog-do-modal this parent param)			method
+  Displays modal dialog. Arguments becomes corresponding arguments of
+  DialogBoxIndirectParam.
+
+(rp:ww-dialog-create-modeless this parent param)		method
+  Creates modeless dialog box. Arguments becomes corresponding arguments of
+  CreateDialogIndirectParam.
+
+(rp:ww-make-dialog-template dlg-desc)				procedure
+  Generates template of dialog box. Syntax of dlg-desc is as follows.
+	dlg-desc ::= (dlg-caption dlg-x dlg-y dlg-width dlg-height
+		      dlg-options ctl-desc ...)
+	dlg-caption ::= string
+	dlg-x ::= integer
+	dlg-y ::= integer
+	dlg-width ::= integer
+	dlg-height ::= integer
+	dlg-options ::= (dlg-option ...)
+	dlg-option ::= ('font pointsize weight italic font)
+		     | ('help-id helpid) | ('ex-style exstyle) | ('style style)
+		     | ('menu menu) | ('window-class windowclass)
+	pointsize ::= integer
+	weight ::= integer
+	italic ::= integer
+	font ::= string
+	helpid ::= integer
+	exstyle ::= integer
+	style ::= integer
+	menu ::= string
+	windowclass ::= string
+	ctl-desc ::= (id class title x y cx cy ctl-options)
+	id ::= integer
+	class ::= 'button | 'edit | 'static | 'list-box | 'scroll-bar
+		| 'combo-box | string
+	title ::= string
+	x ::= integer
+	y ::= integer
+	cx ::= integer
+	cy ::= integer
+	ctl-options ::= (ctl-option ...)
+	ctl-option ::= ('help-id helpid) | ('ex-style exstyle) | ('style style)
+		     | ('creation-data data)
+	data ::= string
+
+(rp:ww-dialog-dispatcher (wnd message wparam lparam) (msg exp ...) ...)	syntax
+  Generate dialog procedure description. Simply return 0 for message without
+  matching clause.
+
+(rp:ww-message-box wnd text option ...)				procedure
+	[option]			[default]
+	caption		lpCaption	NULL
+	buttons				ok
+	icon				#f
+	default-button			1
+	mode				application
+	options				()
+  Displays message box. Arguments and option caption becomes corresponding
+  arguments of MessageBox. Other options determines the value of uType.
+  The value of buttons must be one of 'ok, 'ok-cancel, 'abort-retry-ignore,
+  'yes-no-cancel, 'yes-no, 'retry-cancel. The value of icon must be one of
+  #f, 'hand, 'question, 'exclamation, 'asterisk. The value of default-button
+  must be integer between 1 from 4. The value of mode must be one of
+  'application, 'system, 'task. The value of option must be list consisting of
+  'help, 'no-focus, 'set-foreground, 'default-desktop-only, 'topmost, 'right,
+  'rtl-reading, 'service-notification.
+
+11. Common dialog boxes
+
+To use procedures in this section, module rp_wwdlg must be linked.
+
+(rp:ww-comdlg-file-create option ...)				procedure
+	[option]					[default]
+	template-in-memory	hInstance		NULL
+	template-module		hInstance		NULL
+	dialog-template		lpTemplateName		NULL
+	filters			lpstrFilter		NULL
+	custom-filter-title	lpstrCustomFilter	NULL
+	filter-index		nFilterIndex		1
+	initial-file		lpstrFile		""
+	max-file		nMaxFile		260
+	max-file-title		nMaxFileTitle		0
+	directory		lpstrIniitalDir		NULL
+	dialog-title		lpstrTitle		NULL
+	default-suffix		lpstrDefExt		NULL
+	cust-data		lCustData		0
+	hook-procedure		lpfnHook		NULL
+	options			Flags			'()
+  Creates object to be used for invoking GetOpenFileName, GetSaveFileName.
+  Options specify elements of OPENFILENAME structure. To store template in
+  memory as hInstance member, use template-in-memory option. To use template
+  in resource, use template-module and dialog-template option. Filters is
+  list of form ((display pattern) ...), display and pattern are strings and
+  used as display string pattern of file name respectively. Options is a list
+  consisting of symbols readonly, overwrite-prompt, hide-readonly,
+  no-change-dir, show-help, no-validate, path-must-exist, file-must-exist,
+  create-prompt, share-aware, no-readonly-return, no-test-file-create,
+  no-network-button, no-longnames, no-dereference-links, longnames,
+  enable-include-notify, enable-sizing. This object has following methods.
+
+(rp:ww-comdlg-file-destroy this)				method
+  Destroys the object and frees memory used for structure.
+
+(rp:ww-comdlg-file-get-open this owner option ...)		method
+(rp:ww-comdlg-file-get-save this owner option ...)		method
+	[option]
+	filter-index		nFilterIndex
+	initial-file		lpstrFile
+	directory		lpstrIniitalDir
+	dialog-title		lpstrTitle
+	default-suffix		lpstrDefExt
+	cust-data		lCustData
+	readonly		Flags&OFN_READONLY
+  Invokes GetOpenFileName, GetSaveFileName respectively. Owner is the owner
+  window of dialog. If option is not specified, corresponding member of
+  OPENFILENAME structure is not changed. Returns file name as strin on success.
+
+(rp:ww-comdlg-file-filter-index this)				method
+(rp:ww-comdlg-file-file-title this)				method
+(rp:ww-comdlg-file-path-offsets this)				method
+(rp:ww-comdlg-file-extension-different? this)			method
+(rp:ww-comdlg-file-readonly? this)				method
+  Returns current value of nFilterIndex, lpstrFileTitle,
+  (nFileOffset nFileExtension), Flags&OFN_EXTENSIONDIFFERENT,
+  Flags&OFN_READONLY in OPENFILENAME structure.
+
+(rp:ww-document-create option ...)				procedure
+	[option]			[default]
+	dialog-option			()
+	dialog-flags			(path-must-exist)
+	open-dialog-option		()
+	open-dialog-flags		(file-must-exist)
+	save-dialog-option		()
+	save-dialog-flags		(hide-readonly overwrite-prompt)
+  Creates object abstracting the behavior of application saving to and load
+  from files its data. Dialog-option is list of options to
+  rp:ww-comdlg-file-create other than options, dialog-flags is options
+  to rp:ww-comdlg-file-create. Open-dialog-option, open-dialog-flags,
+  save-dialog-option, save-dialog-flags are options specific to loading or
+  saving.
+  Saving and loading can be done with one of thee types of interfaces. Select
+  one which is appropriate for your application. *-by-name interface takes
+  procedure which actually does input/output, called in the form
+  (proc this file wnd filter-index extension-different?). File is the name of
+  selected file and application must deal with it in its own responsibility.
+  *-by-handle interface delegates operations to rp:ww-document-load-from-handle
+  and/or rp:ww-document-save-to-handle method implemented by application. File
+  handle created by CreateFile is passed to these methods. *-by-port interface
+  delegates operations to rp:ww-document-load-from-port and/or
+  rp:ww-document-save-to-port method implemented by application. Port created
+  by open-input-file/open-output-file is passed to these methods.
+  This object has following methods.
+
+(rp:ww-document-destroy this)					method
+  Destroys object.
+
+(rp:ww-document-new this)					method
+  Reset object to the status of nothing is loaded.
+
+(rp:ww-document-load-from-file-by-name this proc file)		method
+(rp:ww-document-load-from-file-by-handle this file)		method
+(rp:ww-document-load-from-file-by-port this file)		method
+  Loads data from file.
+
+(rp:ww-document-open-by-name this wnd proc option ...)		method
+(rp:ww-document-open-by-handle this wnd option ...)		method
+(rp:ww-document-open-by-port this wnd option ...)		method
+  Load data from file selected by user. Option is passed to
+  rp:ww-comdlg-file-get-open.
+
+(rp:ww-document-save-by-name this wnd proc option ...)		method
+(rp:ww-document-save-by-handle this wnd option ...)		method
+(rp:ww-document-save-by-port this wnd option ...)		method
+  Save data overwriting current file. If current file is not applicable,
+  user is prompted to specify file to save, in this case option is passed to
+  rp:ww-comdlg-file-get-save.
+
+(rp:ww-document-save-as-by-name this wnd proc option ...)	method
+(rp:ww-document-save-as-by-handle this wnd option ...)		method
+(rp:ww-document-save-as-by-port this wnd option ...)		method
+  Save data to file specified by use. Option is passed to
+  rp:ww-comdlg-file-get-save.
+
+(rp:ww-document-update-title this wnd)				method
+  Reflect currently loaded file name to the caption of wnd.
+
+(rp:ww-document-readonly? this)					method
+  Tells whether currently loaded file is read only or not.
+
+(rp:ww-document-get-path this)					method
+  Returns pathname of currently loaded file.
+
+(rp:ww-document-get-title this [default])			method
+  Returns name of currently loaded file without path prefix. Returns default
+  if nothing is loaded.
+
+(rp:ww-document-load-from-handle this handle wnd filter-index
+  extension-different?)						method
+(rp:ww-document-load-from-port this port wnd filter-index
+  extension-different?)						method
+  One of these methods must be implemented by application according to
+  interface selected to do input, describing behavior of loading data. Handle
+  is windows file handle result from CreateFile applied to file to load. Port
+  is input port result from opening file to load. Wnd is argument of
+  rp:ww-document-open or #f if not applicable. Filter-index is nFilterIndex
+  member resulting from GetOpenFileName and #f if not applicable.
+  Extension-different? is status of Flags&OFN_EXTENSIONDIFFERENT and () if not
+  applicable.
+
+(rp:ww-document-save-to-handle this handle wnd filter-index
+  extension-different?)						method
+(rp:ww-document-save-to-port this port wnd filter-index
+  extension-different?)						method
+  One of these methods must be implemented by application according to
+  interface selected to do output, describing behavior of saving data. Handle
+  is windows file handle result from CreateFile applied to file to save. Port
+  is output port result from opening file to save. Other arguments are simillar
+  to rp:ww-document-load-from-port.
+
+(rp:ww-document-make-title this)				method
+  This method must be implemented by application. Returns string to be
+  displayed as caption of application window.
+
+(rp:ww-comdlg-page-create option ...)				procedure
+	[option]					[default]
+	measure						#f
+	min-margin		rtMinMargin		#f
+	margin			rtMargin		#f
+	options			Flags			'()
+	template-in-memory	hPageSetupTemplate	NULL
+	template-module		hInstance		NULL
+	dialog-template		lpPageSetupTemplateName	NULL
+	cust-data		lCustData		0
+	hook-procedure		lpfnPageSetupHook	NULL
+	page-paint-hook-procedure lpfnPagePaintHook	NULL
+  Creates object to be used for invoking PageSetupDlg. Options specify elements
+  of PAGESETUPDLG structure. Measure specifies unit of min-margin and margin
+  and specified as symbol in-0.01mm or in-0.001in. Min-margin and margin
+  are specified in form of list (left top right bottom).  Options is a list
+  consisting of symbols disable-margins, disable-printer, no-warning,
+  disable-orientation, desable-paper, show-help, disable-page-painting,
+  no-network-button. This object has following methods.
+
+(rp:ww-comdlg-page-destroy this)				method
+  Destroys the object and frees memory used for structure.
+
+(rp:ww-comdlg-page-invoke this owner option ...)		method
+	[option]
+	return-default	Flags&PSD_RETURNDEFAULT
+	dev-mode	hDevMode
+	dev-names	hDevNames
+	cust-data	lCustData
+  Invokes PageSetupDlg. Owner is the owner window of dialog. Returns list of
+  hDevMode and hDevNames on success.
+
+(rp:ww-comglg-page-paper-size this)				method
+(rp:ww-comdlg-page-margin this)					method
+  Returns ptPaperSize and rtMargin member respectively. Return value is a list
+  with first member indicating unit as symbol in-0.01mm or in-0.001in, or #f
+  if unit is unknown.
+
+(rp:ww-comdlg-print-create option ...)				procedure
+	[option]					[default]
+	options			Flags			'()
+	page-range		(nFromPage nToPage)	#t
+	page-range-min-max	(nMinPage nMaxPage)	(1 1)
+	copy			(nCopies PD_COLLATE)	(1 #f)
+	template-module		hInstance		NULL
+	cust-data		lCustData		0
+	print-hook-procedure	lpfnPrintHook		NULL
+	print-dialog-template	lpPrintTemplateName	NULL
+	print-tamplate-in-memory hPrintTemplate		NULL
+	setup-hook-procedure	lpfnSetupHook		NULL
+	setup-dialog-template	lpSetupTemplateName	NULL
+	setup-template-in-memory hSetupTemplate		NULL
+  Creates object to be used for invoking PrintDlg. Each option specifies
+  member of PRINTDLG structure. Options is a list consisting of symbols
+  no-selection, no-pagenums, print-to-file, print-setup, no-warning, return-dc,
+  return-ic, show-help, use-devmode-copies-and-collate, disable-print-to-file,
+  hide-print-to-file, no-network-button. Page-range is specified as #t, symbol
+  'selection or list (nFromPage nToPage). This object has following methods.
+
+(rp:ww-comdlg-print-destroy this)				method
+  Destroys the object and frees memory used for structure.
+
+(rp:ww-comdlg-print-invoke this owner option ...)		method
+	[option]
+	return-default		Flags&PD_RETURNDEFAULT
+	dev-mode		hDevMode
+	dev-names		hDevNames
+	cust-data		lCustData
+	page-range		(nFromPage nToPage)
+	page-range-min-max	(nMinPage nMaxPage)
+	copy			(nCopies PD_COLLATE)
+	print-to-file		Flags&PD_PRINTTOFILE
+	print-setup		Flags&PD_PRINTSETUP
+	return-dc		Flags&PD_RETURNDC
+	return-ic		Flags&PD_RETURNIC
+  Invokes PrintDlg. Owner is the owner window of dialog. Returns list of
+  hDevMode and hDevNames on success.
+
+(rp:ww-comdlg-print-dc this)					method
+(rp:ww-comdlg-print-page-range this)				method
+(rp:ww-comdlg-print-copies this)				method
+(rp:ww-comdlg-print-to-file? this)				method
+  Returns hDC, range of pages selected to be printed (as #t, symbol 'selection
+  or list (nFromPage nToPage)), list (nCopies PD_COLLATE), Flags&PD_PRINTTOFILE
+  respectively.
+
+(rp:ww-printer-create option ...)				procedure
+	[option]			[default]
+	page-setup-dialog-option	()
+	page-setup-dialog-flags		()
+	print-dialog-option		()
+	print-dialog-flags		()
+  Creates object abstracting the printing behavior of application. Each option
+  specifies options of rp:ww-comdlg-page-create and rp:ww-comdlg-print-create.
+  This object has following methods.
+
+(rp:ww-printer-destroy this)					method
+  Destroys object.
+
+(rp:ww-printer-page-setup this wnd option ...)			method
+  Invokes PageSetupDlg. Option is passed to rp:ww-comdlg-page-invoke.
+
+(rp:ww-printer-print this wnd option ...)			method
+  Does printing. Option is passed to rp:ww-comdlg-page-invoke.
+
+(rp:ww-printer-print-ok? this dc wnd)				method
+  Implemented by application if application wants to decide wheter printing
+  is possible to specified printer. The device context get from PrintDlg
+  is passed as dc. Wnd is argument to rp:ww-printer-print. Printing is not
+  done if this method returned #f.
+
+(rp:ww-printer-cancel-dialog-template this)			method
+  Implemented by application if application wants to specify cancel dialog box.
+  Returns dialog template in memory to be given to DialogBoxIndirectParam.
+
+(rp:ww-printer-cancel-dialog-procedure this cencel)		method
+  Implemented by application if application wants to specify dialog prcedure
+  of cancel dialog box. Cancel is a procedure with no arguments and printing
+  is cancelled if called. Default dialog has button of id IDCANCEL and default
+  dialog prcedure calls cancel if the button is pushed.
+
+(rp:ww-printer-abort-procedure this cancel-dialog message-loop continue) method
+  Implemented by application if application wants to specify procedure to be
+  used in SetAbortProc. Cancel-dialog is handle of cancel dialog box,
+  message-loop is a procedure with no arguments and peocesses messages when
+  called. Continue is a procedure with no arguments and returns 1 normally but
+  made to return 0 if procedure cancel of rp:ww-printer-cancel-dialog-procedure
+  once called. Returns following procedure in default.
+	(lambda (dc code) (message-loop) (continue))
+
+(rp:ww-printer-document-name this)				method
+  This method must be implemented by apllication. Returns string to be used
+  as document name in StartDoc.
+
+(rp:ww-printer-render-document this dc cancel-dialog render-page abort)	method
+  This method must be implemented by apllication describing body of printing.
+  Dc is a printer device context, cancel-dialog is a handle of calcel dialog
+  box, render-page is a prcedure of one argument, abort is a procedure with no
+  arguments. One page of output is done when render-page is called. Pass its
+  argument a prcedure with no arguments, this procedure does rendering of
+  output page. When abort is called, printing is cancelled. Abort does not
+  return.
+
+12. Terminal windows
+
+To use procedure in this section, module rp_wwtrm must be linked.
+
+(rp:ww-create-terminal-window proc style x y width height parent id) proedure
+  Creates terminal window. Proc is a procedure with two arguments, style, x, y,
+  width, height, parent, id has same meaning as in rp:ww-create-child-window.
+  Basically terminal window is multiline edit control. Proc is called in form
+  (proc iport oport). Iport and oport are input/output port doing input/output
+  from/to created window respectively. The invocation of proc shall not return.
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

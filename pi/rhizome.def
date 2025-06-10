@@ -1,0 +1,3 @@
+EXPORTS
+	RpProgramDesc
+	rp_in_windows_subsystem

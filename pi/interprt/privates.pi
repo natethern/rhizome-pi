@@ -1,0 +1,102 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: privates.pi,v 1.7 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: privates.pi,v $
+; Revision 1.7  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.6  1999/06/15 07:21:37  qfwfq
+; Preliminary BeOS support
+;
+; Revision 1.5  1999/02/15 08:24:07  qfwfq
+; r5rs -- multiple values, dynamic-wind and eval
+;
+; Revision 1.4  1998/07/31 11:27:29  qfwfq
+; Fasloader support
+;
+; Revision 1.3  1997/10/16 06:25:31  qfwfq
+; Release version 0.40
+;
+; Revision 1.2  1997/04/26 13:29:19  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+; Revision 1.1  1996/09/06 06:13:14  qfwfq
+; Version 0.20 unix revision is up.
+;
+
+(rp:define rp:expand-syntax rp:identity)
+(rp:define rp:eval-in-compiler-environment rp:identity)
+(rp:eval-in-compiler-environment (set! rp:expand-syntax rp:identity))
+(rp:define rp:closed-resolver (rp:lambda _ rp:identity))
+
+(rp:define rp:eq? eq?)
+(rp:define rp:symbol? symbol?)
+(rp:define rp:pair? pair?)
+(rp:define rp:vector? vector?)
+(rp:define rp:string? string?)
+(rp:define rp:number? number?)
+(rp:define rp:boolean? boolean?)
+(rp:define rp:not not)
+(rp:define rp:append append)
+(rp:define rp:set-car! set-car!)
+(rp:define rp:set-cdr! set-cdr!)
+(rp:define rp:real? real?)
+(rp:define rp:integer? integer?)
+(rp:define rp:exact? exact?)
+(rp:define rp:odd? odd?)
+(rp:define rp:zero? zero?)
+(rp:define rp:positive? positive?)
+(rp:define rp:negative? negative?)
+(rp:define rp:/ /)
+(rp:define rp:quotient quotient)
+(rp:define rp:numerator numerator)
+(rp:define rp:denominator denominator)
+(rp:define rp:floor floor)
+(rp:define rp:real-part real-part)
+(rp:define rp:imag-part imag-part)
+(rp:define rp:make-rectangular make-rectangular)
+(rp:define rp:make-polar make-polar)
+(rp:define rp:inexact->exact inexact->exact)
+(rp:define rp:char? char?)
+(rp:define rp:string=? string=?)
+(rp:define rp:make-string make-string)
+(rp:define rp:string-length string-length)
+(rp:define rp:string-ref string-ref)
+(rp:define rp:string-set! string-set!)
+(rp:define rp:string-ci=? string-ci=?)
+(rp:define rp:substring substring)
+(rp:define rp:string-append string-append)
+(rp:define rp:symbol->string symbol->string)
+(rp:define rp:number->string number->string)
+(rp:define rp:map map)
+(rp:define rp:for-each for-each)
+(rp:define rp:memq memq)
+(rp:define rp:assq assq)
+(rp:define rp:char-downcase char-downcase)
+(rp:define rp:call-with-current-continuation call-with-current-continuation)
+(rp:define rp:current-input-port current-input-port)
+(rp:define rp:current-output-port current-output-port)
+(rp:define rp:open-input-file open-input-file)
+(rp:define rp:open-output-file open-output-file)
+(rp:define rp:close-input-port close-input-port)
+(rp:define rp:close-output-port close-output-port)
+(rp:define rp:write write)
+(rp:define rp:display display)
+(rp:define rp:newline newline)
+(rp:define rp:read read)
+(rp:define rp:read-char read-char)
+(rp:define rp:call-with-values call-with-values)
+(rp:define rp:values values)
+(rp:define rp:dynamic-wind dynamic-wind)

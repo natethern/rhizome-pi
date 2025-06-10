@@ -1,0 +1,31 @@
+;;;; @(#)$Id: w_draw.scm,v 1.1 1998/07/31 11:35:11 qfwfq Exp $
+
+(rp:declare-flag-set win:dt
+  (top #x0)			; DrawText flags
+  (left #x0)
+  (center #x1)
+  (right #x2)
+  (vcenter #x4)
+  (bottom #x8)
+  (wordbreak #x10)
+  (singleline #x20)
+  (expandtabs #x40)
+  (tabstop #x80)
+  (noclip #x100)
+  (externalleading #x200)
+  (calcrect #x400)
+  (noprefix #x800)
+  (internal #x1000)
+  (editcontrol #x2000)
+  (path-ellipsis #x4000)
+  (end-ellipsis #x8000)
+  (modifystring #x10000)
+  (rtlreading #x20000)
+  (word-ellipsis #x40000)
+  (plotter 0)			; GetDeviceCaps TECHNOLOGY value
+  (rasdisplay 1)
+  (rasprinter 2)
+  (rascamera 3)
+  (charstream 4)
+  (metafile 5)
+  (dispfile 6))

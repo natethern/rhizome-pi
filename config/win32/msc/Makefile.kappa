@@ -1,0 +1,47 @@
+# @(#)$Header: /u/master/rhizome/config/win32/msc/Makefile.kappa,v 1.1 1999/06/15 07:15:10 qfwfq Exp $
+# $Log: Makefile.kappa,v $
+# Revision 1.1  1999/06/15 07:15:10  qfwfq
+# Rearrange configuration files.
+#
+
+SYMBOL=symb_23.obj
+INCLDIR=..\include
+RM=del /f
+
+CDEBUGFLAGS=-O2
+#CDEBUGFLAGS=-Zi -Od -DREPORT_STATS
+CC=cl -nologo
+CFLAGS=$(CDEBUGFLAGS) -w -DWIN32 -DRK_BIND_EXPORT -I$(INCLDIR)
+LDFLAGS=-link -subsystem:console -entry:mainCRTStartup
+AR=lib -nologo
+CHKPT=
+
+OBJS=cellhdlr.obj $(SYMBOL) runengin.obj read.obj write.obj number.obj ldso.obj $(CHKPT)
+LIBRARY=rhizome.lib
+HDRS=$(INCLDIR)\rhiz_cnf.h $(INCLDIR)\rhizome.h
+
+.c.obj:
+	$(CC) $(CFLAGS) -c $<
+
+all: $(LIBRARY)
+
+$(OBJS): $(HDRS)
+
+$(LIBRARY): $(OBJS)
+	$(AR) -out:$(LIBRARY) $**
+
+test.exe: test.c $(LIBRARY)
+	$(CC) -Fetest.exe $(CFLAGS) test.c .\$(LIBRARY) $(LDFLAGS)
+	@$(RM) test.exp test.lib
+
+install: $(LIBRARY)
+	copy $(LIBRARY) $(LIBDIR)
+	cd ..\include
+	copy rhiz_cnf.h $(LIBDIR)
+	copy rhizome.h $(LIBDIR)
+
+clean:
+	-$(RM) *.obj test.exe
+
+clobber: clean
+	-$(RM) $(LIBRARY)

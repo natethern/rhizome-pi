@@ -1,0 +1,79 @@
+# @(#)$Header: /u/master/rhizome/config/win32/bc/Makefile.pi,v 1.1 1999/06/15 07:14:50 qfwfq Exp $
+# $Log: Makefile.pi,v $
+# Revision 1.1  1999/06/15 07:14:50  qfwfq
+# Rearrange configuration files.
+#
+
+!ifndef BASEDIR
+BASEDIR = c:\rhizome
+!endif
+!ifndef BINDIR
+BINDIR = $(BASEDIR)\bin
+!endif
+!ifndef LIBDIR
+LIBDIR = $(BASEDIR)\lib
+!endif
+
+INCLDIR=..\include
+RM=del /f
+
+CDEBUGFLAGS=-k- -O2
+#CDEBUGFLAGS=-Od -v -DREPORT_STATS
+CCNOLOGO=-q
+CC=bcc32 $(CCNOLOGO)
+CFLAGS=$(CDEBUGFLAGS) -w- -4 -DWIN32 -DRK_BIND_EXPORT -I$(INCLDIR)
+LDFLAGS=-lTpe -lap
+AR=tlib
+NMAKE=$(MAKE)
+
+OBJS=eval.obj prim_exp.obj abbrev.obj subr.obj port.obj numeric.obj charactr.obj reflect.obj main.obj helper.obj \
+	dynload.obj
+LIBRARY=rhzpi.lib
+HDRS=$(INCLDIR)\rhiz_cnf.h $(INCLDIR)\rhizome.h rhiz_pi.h
+
+.c.obj:
+	$(CC) $(CFLAGS) -c $<
+
+all:
+	cd ..\kappa
+	$(NMAKE)
+	cd ..\pi
+	$(NMAKE) pi_boot.exe
+	cd compiler
+	$(NMAKE)
+	cd ..
+
+pi_boot.exe: $(LIBRARY) boot.obj
+	$(CC) $(LDFLAGS) -epi_boot.exe $(CFLAGS) boot.obj .\$(LIBRARY) ..\kappa\rhizome.lib
+
+$(LIBRARY): $(OBJS)
+	-@$(RM) $(LIBRARY)
+	&$(AR) $(LIBRARY) +$**
+	-@$(RM) rhzpi.bak
+
+install: all
+	cd ..\kappa
+	$(NMAKE) LIBDIR=$(LIBDIR) install
+	cd ..\pi
+	copy rhiz_pi.h $(LIBDIR)
+	copy $(LIBRARY) $(LIBDIR)
+	cd compiler
+	$(NMAKE) BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) install
+	cd ..
+
+$(OBJS) boot.obj: $(HDRS)
+
+clean:
+	-$(RM) *.obj pi_boot.exe
+
+clobber: clean
+	-$(RM) $(LIBRARY)
+
+distclean:
+	cd ..\kappa
+	$(NMAKE) clobber
+	cd ..\pi
+	$(NMAKE) clobber
+	cd compiler
+	$(NMAKE) clobber
+	cd ..

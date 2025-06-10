@@ -1,0 +1,186 @@
+# @(#)$Header: /u/master/rhizome/config/beos/intel/Makefile.pi.compiler,v 1.1 1999/06/15 07:14:05 qfwfq Exp $
+# $Log: Makefile.pi.compiler,v $
+# Revision 1.1  1999/06/15 07:14:05  qfwfq
+# Rearrange configuration files.
+#
+
+SHLIBDIR=.
+
+EXESUFFIX=
+AOUT=a
+
+LIBRARY=librhzscm.a
+LIBWW=librhzww.a
+LIBVERSION=0
+PISYSSO=librhzpibe$(LIBVERSION).so
+PISC=pisc$(EXESUFFIX)
+PISF=pisf$(EXESUFFIX)
+PISL=pisl$(EXESUFFIX)
+PI=pi$(EXESUFFIX)
+PIW=piw$(EXESUFFIX)
+PINW=pinw$(EXESUFFIX)
+
+LIBS=$(LIBRARY)
+#LIBS=$(LIBRARY) $(LIBWW)
+SHLIB=$(PISYSSO)
+#SHLIB=
+PROGS=$(PISC) $(PISF) $(PISL) $(PI)
+#PROGS=$(PISC) $(PISF) $(PISL) $(PI) $(PIW) # $(PINW)
+INSTMACRO=
+#INSTMACRO=instmacro
+EXEDEPS=$(SHLIB)
+#EXEDEPS=$(LIBS)
+
+#PISCAUX=rp_wwsyn:
+#PIWAUX=rp_wwsyn: rp_wwutl: rp_wwapi: rp_wwbas: rp_wwui: rp_wwdlg: rp_wwtrm:
+
+RANLIB=ranlib
+SYSLIBS=
+LDPATH=LIBRARY_PATH
+
+IOBJS = rp_fasr.lo rp_priv.lo rp_stdm.lo rp_debg.lo rp_dbgm.lo rp_schm.lo rp_topl.lo rp_expn.lo rp_stds.lo rp_dbgs.lo \
+	rp_sacc.lo rp_extc.lo rp_pi.lo
+WOBJS = rp_wwsyn.lo rp_wwutl.lo rp_wwapi.lo rp_wwbas.lo rp_wwui.lo rp_wwdlg.lo rp_wwtrm.lo
+SOBJS = $(IOBJS) # $(WOBJS)
+
+LIB_PISLFLAGS = -cc "gcc -O2 -m486 -DRK_BIND_STATIC -DRP_MODLIB -I.. -I../../include -c"
+APP_PISLFLAGS = -cc "gcc -O2 -m486 -I.. -I../../include -c" -ld "gcc -Wl,-rpath,$(SHLIBDIR)"
+
+BOOTPISC = ../pi_boot ../bootrc.pi ../interprt bootpisc.scm
+BOOTPISF = ../pi_boot ../bootrc.pi ../interprt bootpisf.scm
+WWOPTS = -load ../interprt/stracces.pi -load ../interprt/extcall.pi \
+	 -load ../win32/wwsyntax.scm -mpath ../win32/win32mcr
+LIB_BOOTPISL = ../pi_boot ../bootrc.pi ../interprt bootpisl.scm $(LIB_PISLFLAGS)
+APP_BOOTPISL = ../pi_boot ../bootrc.pi ../interprt bootpisl.scm $(APP_PISLFLAGS)
+PISLLIB = -nolib -aux -L. -aux -lrhzpibe$(LIBVERSION) $(SYSLIBS)
+#PISLLIB = -nolib -aux ./$(LIBRARY) -aux ../librhzpi.a -aux ../../kappa/librhizome.a $(SYSLIBS)
+
+.SUFFIXES:
+.SUFFIXES: .o .lo .c .scm
+
+.scm.c:; $(BOOTPISC) $<
+
+.c.o:; $(APP_BOOTPISL) -nold $*
+
+.c.lo:; $(LIB_BOOTPISL)" -o $@" -nold $*
+
+all: $(LIBS) $(SHLIB) $(PROGS)
+
+install: all $(INSTMACRO)
+	@set -x; for lib in $(LIBS); do \
+		install -c $$lib $(LIBDIR); $(RANLIB) -t $(LIBDIR)/$$lib; chmod 444 $(LIBDIR)/$$lib; done
+	@if [ -n "$(SHLIB)" ]; then set -x; install -c -m 444 $(SHLIB) $(SHLIBDIR); fi
+	install -s -c -m 555 $(PROGS) $(BINDIR)
+
+instmacro:
+	@cd ../win32/win32mcr; set -x; for mcr in *.scm; do \
+		rm -f $(LIBDIR)/$$mcr; \
+		../../compiler/pisf -output $(LIBDIR)/$$mcr -load w_base.scm $$mcr; \
+		chmod 444 $(LIBDIR)/$$mcr; done
+
+$(LIBRARY): $(IOBJS)
+	$(AR) $(ARFLAGS) $(LIBRARY) $(IOBJS)
+	$(RANLIB) $(LIBRARY)
+
+$(LIBWW): $(WOBJS)
+	$(AR) $(ARFLAGS) $(LIBWW) $(WOBJS)
+	$(RANLIB) $(LIBWW)
+
+$(PISYSSO): $(SOBJS)
+	$(LD) -x -Bshareable -o $@ $(SOBJS) ../rhzpi.so ../../kappa/rhizome.so
+
+rp_fasr.c: ../interprt/fasread.pi
+	$(BOOTPISC) -module rp_fasr ../interprt/fasread.pi
+
+rp_priv.c: ../interprt/privates.pi
+	$(BOOTPISC) -module rp_priv ../interprt/privates.pi
+
+rp_stdm.c: ../interprt/stdmacro.pi
+	$(BOOTPISC) -module rp_stdm ../interprt/stdmacro.pi
+
+rp_debg.c: ../interprt/debugger.pi
+	$(BOOTPISC) -module rp_debg ../interprt/debugger.pi
+
+rp_dbgm.c: ../interprt/dbgmacro.pi
+	$(BOOTPISC) -module rp_dbgm ../interprt/dbgmacro.pi
+
+rp_schm.c: ../interprt/scheme.pi
+	$(BOOTPISC) -module rp_schm ../interprt/scheme.pi
+
+rp_topl.c: ../interprt/toplevel.pi
+	$(BOOTPISC) -module rp_topl ../interprt/toplevel.pi
+
+rp_expn.c: ../interprt/expand.pi
+	$(BOOTPISC) -module rp_expn ../interprt/expand.pi
+
+rp_stds.c: ../interprt/stdsyn.pi
+	$(BOOTPISC) -module rp_stds ../interprt/stdsyn.pi
+
+rp_dbgs.c: ../interprt/dbgsyn.pi
+	$(BOOTPISC) -module rp_dbgs ../interprt/dbgsyn.pi
+
+rp_sacc.c: ../interprt/stracces.pi
+	$(BOOTPISC) -module rp_sacc ../interprt/stracces.pi
+
+rp_extc.c: ../interprt/extcall.pi
+	$(BOOTPISC) -module rp_extc ../interprt/extcall.pi
+
+rp_pi.c: ../interprt/pi.pi
+	$(BOOTPISC) -module rp_pi ../interprt/pi.pi
+
+rp_wwsyn.c: ../win32/wwsyntax.scm
+	$(BOOTPISC) -module rp_wwsyn $(WWOPTS) ../win32/wwsyntax.scm
+
+rp_wwutl.c: ../win32/wwutils.scm
+	$(BOOTPISC) -module rp_wwutl $(WWOPTS) ../win32/wwutils.scm
+
+rp_wwapi.c: ../win32/win32api.scm
+	$(BOOTPISF) -module rp_wwapi $(WWOPTS) ../win32/win32api.scm
+
+rp_wwbas.c: ../win32/wwbase.scm
+	$(BOOTPISC) -module rp_wwbas $(WWOPTS) ../win32/wwbase.scm
+
+rp_wwui.c: ../win32/wwui.scm
+	$(BOOTPISF) -module rp_wwui $(WWOPTS) ../win32/wwui.scm
+
+rp_wwdlg.c: ../win32/wwdlg.scm
+	$(BOOTPISF) -module rp_wwdlg $(WWOPTS) ../win32/wwdlg.scm
+
+rp_wwtrm.c: ../win32/wwterm.scm
+	$(BOOTPISF) -module rp_wwtrm $(WWOPTS) ../win32/wwterm.scm
+
+$(PISC): utils.o pisc.o $(EXEDEPS)
+	$(APP_BOOTPISL) -o pisc -aux utils.o -aux pisc.o -xm debugger $(PISCAUX) $(PISLLIB) utils: pisc:
+
+$(PISF): utils.o pisf.o $(EXEDEPS)
+	$(APP_BOOTPISL) -o pisf -aux utils.o -aux pisf.o -xm debugger $(PISCAUX) $(PISLLIB) utils: pisf:
+
+$(PISL): utils.o pisl.o $(EXEDEPS)
+	$(APP_BOOTPISL) -o pisl -aux utils.o -aux pisl.o -xm stdmacro -xm debugger -xm extcall -xm saccess $(PISLLIB) utils: pisl:
+
+$(PI): $(EXEDEPS)
+	$(APP_BOOTPISL) -o pi $(PISLLIB) rp_pi:
+
+$(PIW): $(EXEDEPS)
+	$(APP_BOOTPISL) -windows -o piw $(PIWAUX) $(PISLLIB) rp_pi:
+
+$(PINW): $(EXEDEPS)
+	$(APP_BOOTPISL) -o pinw $(PIWAUX) $(PISLLIB) rp_pi:
+
+test: pisc.c $(PISC)
+	$(BOOTPISC) -output t.c.i t.scm
+	$(LDPATH)=.:$$$(LDPATH) ./pisc t.scm
+	diff t.c.i t.c
+	$(LDPATH)=.:$$$(LDPATH) ./pisc -output pisc.c.c pisc.scm
+	diff pisc.c pisc.c.c
+	../pi_boot ../bootrc.pi ../interprt t.scm > t.out.i
+	$(APP_BOOTPISL) -o $(AOUT) -xm stdmacro -xm debugger -xm stdproc -xm extcall -xm saccess $(PISLLIB) t
+	$(LDPATH)=.:$$$(LDPATH) ./$(AOUT) > t.out.c
+	diff t.out.i t.out.c
+	@echo "Scheme compiler pisc seems to ran OK."
+
+clean:
+	rm -f *.c *.lo *.o $(AOUT) core.* *.c.i t.out.[ci]
+
+clobber: clean
+	rm -f $(PROGS) $(PISYSSO) $(LIBS)

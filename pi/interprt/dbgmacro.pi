@@ -1,0 +1,49 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: dbgmacro.pi,v 1.3 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: dbgmacro.pi,v $
+; Revision 1.3  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.2  1997/04/26 13:29:15  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+; Revision 1.1  1996/09/06 06:13:12  qfwfq
+; Version 0.20 unix revision is up.
+;
+
+(define step
+  (rp:derivation (lambda (args) `(rp:step (lambda () ,@args) '()))))
+
+(define trace
+  (rp:derivation
+    (lambda (args)
+      (if (rp:null? args) '(rp:void)
+	(rp:cons 'begin (rp:map (lambda (f) `(set! ,f (rp:trace-function ',f ,f))) args))))))
+
+(define trap
+  (rp:derivation
+    (lambda (args)
+      (if (rp:null? args) '(rp:void)
+	(rp:cons 'begin (rp:map (lambda (f) `(set! ,f (rp:trap-function ',f ,f))) args))))))
+
+(define untrace
+  (rp:derivation
+    (lambda (args)
+      (if (rp:null? args) '(rp:void)
+	(rp:cons 'begin (rp:map (lambda (f) `(set! ,f (rp:unhook-applicator ,f))) args))))))
+
+(define trace-error
+  (rp:derivation (lambda (args) `(rp:trace-error (lambda () ,@args) '()))))

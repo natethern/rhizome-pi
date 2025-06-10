@@ -1,0 +1,264 @@
+$Id: debugger,v 1.2 1997/04/26 13:28:52 qfwfq Exp $
+
+(step expression)
+  Executes expression step by step. Interaction with user will be done in the
+  following circumstances.
+
+  Eval: expression ?
+    System is attempting to evaluate expression. The following commands may be
+    used.
+    (enter): Continue stepping.
+    n: Execute normally until expression returns a value.
+    r: Prompted for expression. The input will be evaluated in the top level
+       environment and used in place of value of expression.
+    e: Prompted for expression. The input will be evaluated in the same
+       environment with expression and resulting value is displayed.
+    b: Execute (break).
+
+  Tail recursion: expression ?
+    System is attempting to evaluate expression in the circumstance of tail
+    recursion. The same commands with `Eval:' may be used.
+
+  Return: value ?
+    Evaluation is done with result value. The following commands may be used.
+    (enter): Continue stepping.
+    r: Prompted for expression. The input will be evaluated in the top level
+       environment and used in place of value.
+    b: Execute (break).
+
+  Note 1: If the first element of list to be evaluated is variable, evaluation
+	  process of the variable itself is traced only on the first event the
+	  list is evaluated.
+  Note 2: Step does stepping into macro expansion process. But, if once macro
+	  call is expanded, the expansion result will replace original form,
+	  so stepping of macro expansion will be done only on the first event
+	  of evaluation of macro call.
+  Note 3: Output of debugger is truncated if list or vector structure is too
+	  long or too deep. This is controlled by setting value of global
+	  variable *print-depth* and *print-length*, set them to #f disables
+	  truncation at all.
+	  Expression enclosed in [] is subject to macro expansion.
+
+  Example
+
+pi: (step (tak 3 2 1))
+Eval: [(rp:body (tak 3 2 1))] ? ?
+step n}ext r}eturn e}val b}reak
+Eval: [(rp:body (tak 3 2 1))] ? 
+Tail recursion: (begin [(tak 3 2 1)]) ? 
+ Eval: begin ? 
+ Return: #<101A3A48> ? 
+Tail recursion: [(tak 3 2 1)] ? 
+Tail recursion: ([tak] [3] [2] [1]) ? 
+ Eval: [tak] ? 
+ Tail recursion: tak ? 
+ Return: #<101AA288> ? 
+ Eval: [3] ? 
+ Tail recursion: 3 ? 
+ Return: 3 ? 
+ Eval: [2] ? n
+ Return: 2 ? 
+ Eval: [1] ? n
+ Return: 1 ? 
+Tail recursion: [(rp:body (if (not (< y x)) z (tak (tak ## y z) (tak ## z x) (tak ## x y))))] ? 
+Tail recursion: (begin [(if (not (< y x)) z (tak (tak ## y z) (tak ## z x) (tak ## x y)))]) ? 
+ Eval: begin ? 
+ Return: #<101A3A48> ? 
+Tail recursion: [(if (not (< y x)) z (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)))] ? ?
+step n}ext r}eturn e}val b}reak
+Tail recursion: [(if (not (< y x)) z (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)))] ? 
+Tail recursion: (if [(not (< y x))] [z] [(tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y))]) ? 
+ Eval: if ? 
+ Return: #<101A39F0> ? 
+ Eval: [(not (< y x))] ? n
+ Return: #f ? ?
+step r}eturn b}reak
+ Return: #f ? 
+Tail recursion: [(tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y))] ? 
+Tail recursion: ([tak] [(tak (- x 1) y z)] [(tak (- y 1) z x)] [(tak (- z 1) x y)]) ? 
+ Eval: [tak] ? n
+ Return: #<101AA288> ? 
+ Eval: [(tak (- x 1) y z)] ? b
+break> (continue)
+ Eval: [(tak (- x 1) y z)] ? n
+ Return: 1 ? r
+Value? 2
+ Eval: [(tak (- y 1) z x)] ? r
+Value? 1
+ Eval: [(tak (- z 1) x y)] ? 
+ Tail recursion: ([tak] [(- z 1)] [x] [y]) ? 
+  Eval: [tak] ? n
+  Return: #<101AA288> ? 
+  Eval: [(- z 1)] ? n
+  Return: 0 ? 
+  Eval: [x] ? n
+  Return: 3 ? 
+  Eval: [y] ? n
+  Return: 2 ? 
+ Tail recursion: (if-parsed (not (< #<G.00000003> #<G.00000002>)) #<G.00000004> (tak (tak (- #<G.00000002> 1) #<G.00000003> #<G.00000004>) [(tak (- y 1) z x)] (tak (- #<G.00000004> 1) #<G.00000002> #<G.00000003>))) ? n
+ Return: 2 ? 
+Tail recursion: (if-parsed (not (< #<G.00000003> #<G.00000002>)) #<G.00000004> (tak (tak (- #<G.00000002> 1) #<G.00000003> #<G.00000004>) [(tak (- y 1) z x)] (tak (- #<G.00000004> 1) #<G.00000002> #<G.00000003>))) ? 
+ Eval: (not (< #<G.00000003> #<G.00000002>)) ? 
+  Eval: (< #<G.00000003> #<G.00000002>) ? 
+   Eval: #<G.00000003> ? 
+   Return: 1 ? 
+   Eval: #<G.00000002> ? 
+   Return: 2 ? 
+  Return: #t ? 
+ Return: #f ? 
+Tail recursion: (tak (tak (- #<G.00000002> 1) #<G.00000003> #<G.00000004>) [(tak (- y 1) z x)] (tak (- #<G.00000004> 1) #<G.00000002> #<G.00000003>)) ? r
+Value? 'foo
+Return: foo ? 
+foo
+pi: (step (let ((x 0) (y 1)) (cons x y)))
+Eval: [(rp:body (let ((x 0) (y 1)) (cons x y)))] ? 
+Tail recursion: (begin [(let ((x 0) (y 1)) (cons x y))]) ? 
+ Eval: begin ? 
+ Return: #<101A3A48> ? 
+Tail recursion: [(let ((x 0) (y 1)) (cons x y))] ? 
+Tail recursion: ([(lambda (x y) (cons x y))] [0] [1]) ? 
+ Eval: [(lambda (x y) (cons x y))] ? 
+ Tail recursion: (rp:lambda (#<G.00000009> #<G.0000000A>) [(rp:body (cons x y))]) ? 
+  Eval: rp:lambda ? 
+  Return: #<101A39D8> ? 
+ Return: #<000FC788> ? 
+ Eval: [0] ? n
+ Return: 0 ? 
+ Eval: [1] ? n
+ Return: 1 ? 
+Tail recursion: [(rp:body (cons x y))] ? 
+Tail recursion: (begin [(cons x y)]) ? 
+ Eval: begin ? 
+ Return: #<101A3A48> ? 
+Tail recursion: [(cons x y)] ? 
+Tail recursion: ([cons] [x] [y]) ? 
+ Eval: [cons] ? n
+ Return: #<101A31F0> ? 
+ Eval: [x] ? 
+ Tail recursion: #<G.00000009> ? 
+ Return: 0 ? 
+ Eval: [y] ? 
+ Tail recursion: #<G.0000000A> ? 
+ Return: 1 ? 
+Return: (0 . 1) ? 
+(0 . 1)
+
+
+(trace function-name ...)
+  Makes procedure calls with name function-name to display arguments and value
+  on entrance and return respectively. Because on scheme, precedures often
+  does not return, call frame is displayed not via indent, but serial number
+  is used instead.
+
+  Example
+
+pi: (trace tak)
+#<done>
+pi: (tak 3 2 1)
+<0>Call: (tak 3 2 1)
+<1>Call: (tak 2 2 1)
+<1>Return: 1
+<2>Call: (tak 1 1 3)
+<2>Return: 3
+<3>Call: (tak 0 3 2)
+<3>Return: 2
+<4>Call: (tak 1 3 2)
+<4>Return: 2
+<0>Return: 2
+2
+
+
+(trap function-name ...)
+  On the contrast that trace does display only, trap does interaction with user
+  at each time procedure is called. No display is done at return time, and so
+  normal execution can be done even if program contains iteration via tail
+  recursion.
+
+  Call: (function . args) ?
+    Function is about to be called. The following commands may be used.
+    (enter): Continue execution.
+    s: Enter stepping mode.
+    r: Prompted for expression. The input will be evaluated in the top level
+       environment and used in place of return value.
+    b: Execute (break).
+
+  Example
+
+pi: (trap tak)
+#<done>
+pi: (tak 3 2 1)
+Call: (tak 3 2 1) ? 
+Call: (tak 2 2 1) ? 
+Call: (tak 1 1 3) ? ?
+pass s}tep r}eturn b}erak
+Call: (tak 1 1 3) ? b
+break> (continue)
+Call: (tak 1 1 3) ? s
+Eval: (if-parsed (not (< #<G.00000003> #<G.00000002>)) #<G.00000004> (tak (tak (- #<G.00000002> 1) #<G.00000003> #<G.00000004>) (tak (- #<G.00000003> 1) #<G.00000004> #<G.00000002>) (tak (- #<G.00000004> 1) #<G.00000002> #<G.00000003>))) ? 
+ Eval: (not (< #<G.00000003> #<G.00000002>)) ? n
+ Return: #t ? 
+Tail recursion: #<G.00000004> ? 
+Return: 3 ? 
+Call: (tak 0 3 2) ? 
+Call: (tak 1 3 2) ? r
+Value? -1
+-1
+
+
+(untrace function-name ...)
+  Undo the effect of trace, trap.
+
+
+(trace-error expression)
+  Normally, rhizome/pi generates no report about where error occured. User can
+  browse backtrace interractively at error if program is executed under
+  trace-error. But it is at the big cost of execution time.
+
+  frame ?
+    The following commands may be used.
+    (enter): Display parent frame.
+    e: Prompted for expression. The input will be evaluated in the same
+       environment with frame and resulting value is displayed.
+    b: Execute (break).
+    a: Diaplay entire frames.
+    q: Quit display of backtrace.
+
+  Moreover, information of backtrace will be saved to the variable $err and
+  can be redisplayed by (backtrace $err). (Of cource, the value of $err may be
+  assigned to any variable or such at your will.)
+
+  Example
+
+pi: (define len1 (lambda (l) (if (null? l) 0 (+ (len1 (cdr l)) 1))))
+#<done>
+pi: (trace-error (len1 '(1 2 3 . 4)))
+
+Illegal argument supplied to function
+Backtrace:
+(cdr #<G.00000015>) ? ?
+parent e}val b}reak a}ll q}uit
+(cdr #<G.00000015>) ? 
+(len1 (cdr #<G.00000015>)) ? 
+=tail-recursion=> (+ (len1 (cdr #<G.00000015>)) [1]) ? 
+(len1 (cdr #<G.00000015>)) ? 
+=tail-recursion=> (+ (len1 (cdr #<G.00000015>)) [1]) ? 
+(len1 (cdr #<G.00000015>)) ? b
+break> (continue)
+(len1 (cdr #<G.00000015>)) ? a
+=tail-recursion=> (+ (len1 (cdr #<G.00000015>)) [1])
+(len1 (cdr #<G.00000015>))
+=tail-recursion=> (+ (len1 (cdr #<G.00000015>)) [1])
+(len1 (quote-parsed 1 2 3 ..))
+#f
+pi: (trace-error (len1 '(1 2 3 4 5 6 7 8 . 9)))
+
+Illegal argument supplied to function
+Backtrace:
+(cdr #<G.00000015>) ? 
+(len1 (cdr #<G.00000015>)) ? 
+=tail-recursion=> (+ (len1 (cdr #<G.00000015>)) [1]) ? q
+#f
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

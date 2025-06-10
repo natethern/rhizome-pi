@@ -1,0 +1,58 @@
+.\" @(#)$Id: pisf.man,v 1.1 1998/07/31 11:49:06 qfwfq Exp $
+.\" $Log: pisf.man,v $
+.\" Revision 1.1  1998/07/31 11:49:06  qfwfq
+.\" Features addition for release 0.45
+.\"
+.TH PISF 1 "Rhizome/pi"
+.SH NAME
+pisf \- A Scheme Fasloader
+.SH SYNOPSIS
+.B pisf -help
+.br
+.B pisf
+[
+.I options
+]
+.I file
+.SH DESCRIPTION
+If invoked with
+.B -help
+option,
+.B pisf
+Outputs brief summary of command line syntax. Otherwise
+.B pisf
+Converts
+.I file
+to easy to load format. Optionally,
+.B pisf
+can output program in C language which is smaller than output of pisc
+but run slower.
+.SH OPTIONS
+.TP
+.B -exec \fIinterpreter
+Output executable script file for unix like operating systems.
+Specify full pathname of executable to execute the program.
+First line of resulting file will have form "#!
+.I interpreter
+".
+.TP
+.B -module \fImodule-identifier
+Genarate C program. 
+.I Module-identifier
+has the same meaning as
+in pisc and resulting file can be specified as module to pisl
+as if it was output from pisc.
+.TP
+.B -output \fIfilename
+Specifies file name of output.
+.TP
+.B -mpath \fIdir
+Add named directory to search path of rp:use-macro-package.
+This option may be used multiple times.
+.TP
+.B -load \fIfilename
+Loads named file into the environment of compiler befor reading
+source file. This may be used in the purpose of defining macros
+at compile time. This option may be used multiple times.
+.SH AUTHOR
+INUJIMA Masaru (qfwfq@kt.rim.or.jp).

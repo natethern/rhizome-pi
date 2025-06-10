@@ -1,0 +1,358 @@
+$Id: extfunc,v 1.6 2002/09/27 12:27:38 qfwfq Exp $
+
+1. Data types
+
+  To call external functions, data representation must be converted from/to
+  common format so that other programing language can handle them.
+  To direct such conversion, external representation of data is specified
+  by the following keywords.
+
+	integer		Integral number with value between -2^31 (incuding)
+			and 2^31 (excluding). External representation is
+			type 'signed long int' in C.
+	cardinal	Integral number with value between 0 (including) and
+			2^32 (excluding). External representation is type
+			'unsigned long int' in C.
+	float		Inexact number. External representation is type
+			'double' in C. (tpye 'float' is not supported.)
+	buffer		Generic pointer to data. External representation is
+			type 'void *' in C.
+			NULL pointers are represinted by #f.
+	procedure	Pointer to function. External representation is type
+			'int (*)()' in C.
+			NULL pointers are represinted by #f.
+	effect		Data type winth only one value #<done>. external
+			representation is type 'void' in C.
+
+2. Loading modules
+
+  Use following procedure to load external module and get its handle.
+
+(rp:load-external-object module-name)				procedure
+  Load module nemed by module-name and returns its handle. Specific format
+  of module-name depends on intrinsic feature used to implement this.
+  Consule manual page of, for example, dlopen (*BSD) or LoadLibrary (Win32).
+
+(rp:unload-external-object module)				procedure
+  If module loaded by rp:load-external-object is no longer needed and there
+  is no possibility of its content being refered, mudule can be unloaded by
+  this procedure.
+
+3. Impoort and export procedures
+
+  Once module is loaded, address of functions in the module can be retrieved
+  as object in external 'procedure' type (see section 1. above).
+  External 'procedure' object can be converted from/to scheme procedure by
+  specifying its argument and return types.
+
+(rp:import-procedure module entry-name)				procedure
+  Get function address of entry-name in module. Module is a return value of
+  rp:load-external-object. Specific format of entry-name depends on many
+  elements. In some circumstances, verbatim function name works, while in
+  other circumstances underscore character '_' must be prepended to function
+  name. In extreme case, some cryptic suffix or prefix must be added.
+  Consult manual page of, for example, dlsym (*BSD) or GetProcAddress (Win32)
+  and document of your compiler or library.
+
+(rp:entry->procedure entry return-type (argument-type ...))	syntax
+  Make scheme procedure from external 'procedure' object. Return-type and
+  argument-type is specified by the keywords listed in section 1.
+  Type float is invalid for return-type (calling function which returns
+  double is not supported) and type effect is invalid for argument-type.
+
+(rp:external-procedure module entry-name return-type (argument-type ...)) syntax
+  Same as
+	(rp:entry->procedure
+	  (rp:import-procedure module entry-name)
+	  return-type (argument-type ...))
+
+(rp:make-entry return-type ((variable argument-type) ...) body ...)	syntax
+  Create a external 'procedure' object from scheme expression. The value can
+  be used as 'callback function'. When the object gets called, its arguments
+  are interpreted as specified by argument-type and bound to corresponding
+  variable, body is evaluated in the scope of binding and value of the last
+  expression is interpreted according to return-type, giving return value.
+  Type float is invalid for return-type and type effect is invalid for
+  argument-type.
+
+(rp:destroy-exported-procedure proc)				procedure
+  If there is no possibility of proc, which is a value of rp:make-entry, being
+  activated, the resources being used for proc can be freed by this.
+
+(rp:exported-procedure? obj)					procedure
+  Returns true if obj is an external 'procedure' object created by
+  rp:import-procedure or rp:make-entry.
+
+4. Handling buffers
+
+  Data of type 'buffer' is handled by the following procedures. If structure
+  of buffer is not a simple array of bytes, halfwords or words, use
+  rp:define-buffer-structure discussed in next section insted.
+
+(rp:make-external-buffer nwords)				procedure
+  Allocate nword words (nwords*4 bytes) of memory using malloc and returns
+  buffer object points to it.
+
+(rp:destroy-external-buffer buffer)				procedure
+  Deallocate memory pointed by buffer using free. Buffer must be one such that
+  memory location pointed by it can be suppied to free.
+
+(rp:external-buffer? obj)					procedure
+  Returns true if obj is a buffer object created by rp:make-external-buffer.
+
+(rp:skip-buffer-element buffer offset)				procedure
+  Returns new buffer object that points to the address advanced with offset
+  byte from original buffer.
+
+(rp:store-external-chars buffer offset string [size])		procedure
+  Copy contents of string to the memory location pointed by buffer plus offset.
+  If size is not specified, character count being copied is just the length of
+  string. If size is #f, area is terminated by null character. If size is
+  integer, it specifies number of characters being copied, if string is
+  shorter, rest will be padded with null characters.
+
+(rp:load-external-chars buffer offset size)			procedure
+  Retrieve characters from the memory location pointed by buffer plus offset
+  and returns them as string. If size is #f, buffer is assumed to contain
+  null terminated string and makes string containing characters up to null
+  character (excluding null character itself.) Otherwise size must be integer
+  and it specifies length of resulting string.
+
+(rp:load-external-halfword buffer offset signed?)		procedure
+  Regard the memory location pointed by buffer plus offset as pointer to
+  halfword and returns its content. If signed? is #t, value is between
+  -2^15 (including) and 2^15 (excluding), If signed? is #f, value is between
+  0 (including) and 2^16 (excluding).
+
+(rp:store-external-halfword buffer offset signed? value)	procedure
+  Regard the memory location pointed by buffer plus offset as pointer to
+  halfword and store value to it. If signed? is #t, value must be in between
+  -2^15 (including) and 2^15 (excluding), If signed? is #f, value must be in
+  between 0 (including) and 2^16 (excluding).
+
+(rp:load-external-single-float buffer offset)			procedure
+  Regard the memory location pointed by buffer plus offset as pointer to
+  single precision float and returns its content.
+
+(rp:store-external-single-float buffer offset value)		procedure
+  Regard the memory location pointed by buffer plus offset as pointer to
+  single precision float and store value to it.
+
+(rp:integer-array-load buffer index)				procedure
+(rp:integer-array-store buffer index value)			procedure
+(rp:cardinal-array-load buffer index)				procedure
+(rp:cardinal-array-store buffer index value)			procedure
+(rp:buffer-array-load buffer index)				procedure
+(rp:buffer-array-store buffer index value)			procedure
+(rp:procedure-array-load buffer index)				procedure
+(rp:procedure-array-store buffer index value)			procedure
+(rp:float-array-load buffer index)				procedure
+(rp:float-array-store buffer index value)			procedure
+  Regard the memory location pointed by buffer as array of integer, cardinal,
+  buffer, procedure or float data respectively and get element or set value.
+  Index is index of array element, not a byte offset.
+
+(rp:pointer=? buffer1 buffer2)					procedure
+  Returns #t if buffer1 and buffer2 points to same memory location eventually.
+  Otherwise returns #f.
+
+5. Structures
+
+  Many system function call or API takes pointer of structure as argument to
+  get parameter or store result. Use the following syntaxes to treat buffer
+  as pointer to structure.
+
+(rp:define-buffer-structure {structure-name | (structure-name init-param ...)}
+			(element-name . element-desc) ...)	syntax
+(rp:define-packed-buffer-structure
+			{structure-name | (structure-name init-param ...)}
+			{(element-name . element-desc) | (align n)} ...) syntax
+  Declare struncture. Init-param is parameter names mandatory in
+  initialization. Specifying structure-name alone means initialization has no
+  mandatory parameters.
+  In rp:define-buffer-structure, data of word or halfword width are aligned
+  automatically to have multiple of 4 or even offsets respectively. While in
+  rp:define-packed-buffer-structure, data are not aligned automatically and
+  alignments are designated by (align n) to mutiple of n.
+  Element-desc has the following syntax.
+
+	<element-desc> --> <scalar-desc> | <byte-array-desc> |
+		<array-desc> | <structure-desc>
+	<scalar-desc> --> (<scalar-type-keyword>) |
+		(<scalar-type-keyword> <default-value>)
+	<scalar-type-keyword> --> integer | cardinal | float | buffer |
+		procedure | short-integer | short-cardinal
+	<default-value> --> <expression>
+	<byte-array-desc> --> (byte-array <size>) |
+		(byte-array <size> <default-value>)
+	<array-desc> --> (array <size> <element-desc>) |
+		(array <size> <index-variable> <element-desc>)
+	<size> --> <number>
+	<index-variable> --> <variable>
+	<structure-desc> --> (structure <structure-name> . <initialize-params>)
+	<structure-name> --> <identifier>
+	<initialize-params> --> Argument list for <structure-name>-set-values
+
+  In initialization of structure, each default-value is evaluated within the
+  scope of binding of each init-param to corresponding actual argument. For
+  byte-array, default-value is specfied as string. If array element is declared
+  with index-variable, it is bound to array index when evaluating default-value
+  for its element.
+
+  Rp:define-buffer-structure is expanded to the definition of following macros.
+
+(<structure-name>-allocate n)					syntax
+  Allocate memory sufficient to hold n elements array of structure
+  <structure-name>. No initialization is done for the contents of the allocated
+  memory.
+
+(<structure-name>-create param ... . <initialize-params>)	syntax
+  Allocate memory for structure <structure-name> and initialize its elements.
+  Param will be the value of init-param in structure declaration and default
+  values are calculated. Default values can be overridden by
+  <initialize-params> for each specific element. Evaluation of default value
+  will not occur when specific value for the element is given. Syntax of
+  <initialize-params> is same as argument list of <structure-name>-set-values
+  but element #t can not be specified.
+
+(<structure-name>-create-array params ...)			syntax
+  Create array of structure <structure-name> and initialize elements according
+  to params. Params have same syntax with arguments of <structure-name>-create
+  and number of params gives size of array allocated. Value has the form
+  (buffer . nelt), buffer is buffer object pointing to the first element of
+  array and nelt is the size of array.
+
+(<structure-name>-size)						syntax
+  Literal number which gives size of structure <structure-name> in bytes.
+
+(<structure-name>-array-ref buffer n)				syntax
+  Assuming buffer points to array of structure <structure-name>, returns
+  buffer object pointing to its n'th element.
+
+(<structure-name>-set-values buffer (element-name . <value>) ...) syntax
+  Assuming buffer points to struncture <structure-name>, fill its elements
+  according to argument list. For first element of argument list, special
+  element #t can be specified, instrcuting re-initialization using default
+  values. Accroding to type of element, <value> has the following syntax.
+
+	#t		(param ...)
+	  Param is used to calculate default values as in
+	  <structure-name>-create.
+	scalar		(<expression>)
+	byte-array	(<expression>)
+	  Value for byte-array is specified as string.
+	array		(<value>)
+	  Fill all elements with same value.
+	array		(<variable> <value>)
+	  Calculate values in the scope of binding <variable> to array index
+	  for each element.
+	array		(<variable> <expression> <value>)
+	  <Value> is evaluated and stored only if <expression> evalueated to
+	  true value.
+	structure	((element-name . <value>) ...)
+	  The list is used as argument of <structure-name>-set-values for
+	  structure element.
+
+(<structure-name>-let-values buffer
+		((variable element-name) ...) body ...)		syntax
+  Assuming buffer points to struncture <structure-name>, bind its elements
+  to each corresponding variable and expressions in body are evaluated as in
+  let. For element of type byte-array, value is retrieved as string. For
+  element of type array, value will be a vector. For element of type structure,
+  value will be a buffer object pointing to the location of the structure.
+
+(<structure-name>-offsets element-name)				syntax
+  Literal number which gives offset of each element.
+
+(<structure-name>-store-<element-name> buffer index ... value)	syntax
+(<structure-name>-load-<element-name> buffer index ...)		syntax
+  Defined for each element of type (array of) scalar. If type of element is
+  array, index specifies array element in it. Value is stored to specified
+  element or value of specified element is retrieved.
+
+(<structure-name>-get-<element-name> buffer index ...)		syntax
+  Defined for each element of type (array of) byte-array or structure. Usage
+  of index are the same as above. Buffer object pointing to specified element
+  is returned.
+
+6. Manifest constants
+
+  Next syntax defines macro which expands to litarals.
+
+(rp:declare-constants <macro-name> (constant-name value) ...)	syntax
+  Defines <macro-name> as syntax keyword described as following.
+
+(<macro-name> constant-name)					syntax
+  Expands to literal with value corresponding to constant-name. Value is
+  evaluated at compile time.
+
+(rp:declare-flag-set <macro-name> (flag-name value) ...)	syntax
+  Defines <macro-name> as syntax keyword described as following.
+
+(<macro-name> flag-name ...)					syntax
+  Expands to literal with value equal to bitwise-or of all values
+  corresponding to flag-name. Value is evaluated at compile time.
+
+7. Manipulating strings
+
+  Following procedure and macros are to aid manipulating string data suitable
+  for passed as arguments of external functions.
+
+(rp:export-string string)					procedure
+  Makes buffer object which contains null terminated string filled with
+  characters from the argument string data.
+
+(rp:fancy-string part ...)					syntax
+  Expands to litaral string resulting from catenating part. Part must be
+  literal string, character or integer of character code.
+
+(rp:asciz string)						syntax
+  Same as (rp:fancy-string string 0).
+
+8. Type casting
+
+  On some occasions, type casting between integer, buffer object, external
+  'procedure' object is needed.
+
+(rp:cast-integer->cardinal integer)				procedure
+(rp:cast-integer->buffer integer)				procedure
+(rp:cast-integer->procedure integer)				procedure
+(rp:cast-cardinal->integer cardinal)				procedure
+(rp:cast-cardinal->buffer cardinal)				procedure
+(rp:cast-cardinal->procedure cardinal)				procedure
+(rp:cast-buffer->integer buffer)				procedure
+(rp:cast-buffer->cardinal buffer)				procedure
+(rp:cast-buffer->procedure buffer)				procedure
+(rp:cast-procedure->integer procedure)				procedure
+(rp:cast-procedure->cardinal procedure)				procedure
+(rp:cast-procedure->buffer procedure)				procedure
+  These procedures converts type of data as to yield same bit pattern when
+  passed to external function.
+
+9. Demo programs
+
+  Three demostration programs are provided in demos directory, one is for X11
+  environmant and others are for Win32 environment. Both are step by step
+  translation of typical sample program in C.
+
+x11demo.scm (for X11)
+
+	pi x11demo.scm [-toolkitoption ...]
+
+  This is written using Xaw widget set and behaves almost like xlogo but
+  is not session aware and shape is not supported.
+
+windemo.scm (for Win32)
+
+	pi windemo.scm "string"
+
+  This shows up simple window and displays string in its client area.
+
+windemo0.scm (for Win32)
+
+  Load this file in pi. This defines three procedures wrapping Win32 API.
+  See the file for detail.
+
+-- 
+INUJIMA, Masaru
+qfwfq@kt.rim.or.jp

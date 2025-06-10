@@ -1,0 +1,25 @@
+.\" @(#)$Id: piw.man,v 1.1 1998/07/31 11:49:07 qfwfq Exp $
+.\" $Log: piw.man,v $
+.\" Revision 1.1  1998/07/31 11:49:07  qfwfq
+.\" Features addition for release 0.45
+.\"
+.TH PIW 1 "Rhizome/pi"
+.SH NAME
+piw \- A Win32 Scheme Interpreter
+.SH SYNOPSIS
+.B piw
+[
+.I file
+] [
+.I arguments
+]
+.SH DESCRIPTION
+Piw is a scheme interpreter.
+This differs from pi only in the following points.
+.LP
+Piw is built as GUI application while pi is a console application.
+Refer to the explanation of -windows option in pisl.
+.LP
+Into piw, library for making windows application (ww library) is linked.
+.SH AUTHOR
+INUJIMA Masaru (qfwfq@kt.rim.or.jp).

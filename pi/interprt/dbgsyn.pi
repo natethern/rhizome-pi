@@ -1,0 +1,46 @@
+; Copyright (c) 1996-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: dbgsyn.pi,v 1.2 2004/08/06 05:48:06 qfwfq Exp $
+; $Log: dbgsyn.pi,v $
+; Revision 1.2  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.1  1997/04/26 13:29:16  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+
+(define-syntax step
+  (lambda (x) (syntax-case x () ((_ e) (syntax (rp:step (lambda () e) '()))))))
+
+(define-syntax trace
+  (lambda (x)
+    (syntax-case x ()
+      ((_) (syntax (rp:void)))
+      ((_ f ...) (syntax (begin (set! f (rp:trace-function 'f f)) ...))))))
+
+(define-syntax trap
+  (lambda (x)
+    (syntax-case x ()
+      ((_) (syntax (rp:void)))
+      ((_ f ...) (syntax (begin (set! f (rp:trap-function 'f f)) ...))))))
+
+(define-syntax untrace
+  (lambda (x)
+    (syntax-case x ()
+      ((_) (syntax (rp:void)))
+      ((_ f ...) (syntax (begin (set! f (rp:unhook-applicator f)) ...))))))
+
+(define-syntax trace-error
+  (lambda (x) (syntax-case x () ((_ e) (syntax (rp:trace-error (lambda () e) '()))))))

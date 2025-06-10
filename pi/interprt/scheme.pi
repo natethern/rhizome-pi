@@ -1,0 +1,901 @@
+; Copyright (c) 1993,96-99 Inujima, Masaru <qfwfq@kt.rim.or.jp>
+;
+; Permission to use, copy, modify, and distribute this software for any
+; purpose with or without fee is hereby granted, provided that the above
+; copyright notice and this permission notice appear in all copies.
+;
+; THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+; WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+; ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+; WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+;;;; @(#)$Id: scheme.pi,v 1.8 2005/08/30 07:49:25 qfwfq Exp $
+; $Log: scheme.pi,v $
+; Revision 1.8  2005/08/30 07:49:25  qfwfq
+; New make target install_embed, libraries for embedding into other apps.
+;
+; Revision 1.7  2004/08/06 05:48:06  qfwfq
+; change license, using OpenBSD:/usr/share/misc/license.template
+;
+; Revision 1.6  1999/02/15 08:24:07  qfwfq
+; r5rs -- multiple values, dynamic-wind and eval
+;
+; Revision 1.5  1998/07/31 11:29:25  qfwfq
+; Features addition for release 0.45
+;
+; Revision 1.4  1997/10/16 06:25:31  qfwfq
+; Release version 0.40
+;
+; Revision 1.3  1997/05/12 07:21:32  qfwfq
+; version 0.31 - some enhancements on error handling etc.
+;
+; Revision 1.2  1997/04/26 13:29:20  qfwfq
+; Version 0.30 - hygienic macro system with syntax-case
+;
+; Revision 1.1  1996/09/06 06:13:15  qfwfq
+; Version 0.20 unix revision is up.
+;
+; Revision 1.1  1993/11/08 14:09:52  qfwfq
+; Initial revision
+;
+
+(define (rp:make-promise proc)
+  (letrec
+    ((force
+       (lambda ()
+	 (rp:call-with-values proc
+	   (lambda vals
+	     (if proc
+	       (begin
+		 (set! proc #f)
+		 (set! force (lambda () (rp:apply rp:values vals)))))
+	     (force))))))
+    (lambda () (force))))
+
+(define (force promise) (promise))
+
+(define equal?
+  (letrec
+    ((equal?
+       (lambda (obj1 obj2)
+	 (cond ((rp:pair? obj1)
+		(if (rp:pair? obj2)
+		  (and (equal? (rp:car obj1) (rp:car obj2))
+		       (equal? (rp:cdr obj1) (rp:cdr obj2)))
+		  #f))
+	       ((rp:vector? obj1)
+		(if (rp:vector? obj2)
+		  (let ((len1 (rp:vector-length obj1)) (len2 (rp:vector-length obj2)))
+		    (if (rp:= len1 len2)
+		      (let loop ((i 0))
+			(cond ((rp:= i len1) #t)
+			      ((rp:not (equal? (rp:vector-ref obj1 i) (rp:vector-ref obj2 i))) #f)
+			      (else (loop (rp:+ i 1)))))
+		      #f))
+		  #f))
+	       ((rp:string? obj1)
+		(if (rp:string? obj2) (rp:string=? obj1 obj2) #f))
+	       (else (rp:eqv? obj1 obj2))))))
+    equal?))
+
+(define rp:equal? equal?)
+
+(define member
+  (letrec
+    ((member
+       (lambda (obj list)
+	 (if (rp:null? list) #f
+	   (if (rp:equal? obj (rp:car list)) list (member obj (rp:cdr list)))))))
+    member))
+
+(define assoc
+  (letrec
+    ((assoc
+       (lambda (obj list)
+	 (if (rp:null? list) #f
+	   (if (rp:equal? obj (rp:car (rp:car list)))
+	     (rp:car list)
+	     (assoc obj (rp:cdr list)))))))
+    assoc))
+
+(define (call-with-input-file string proc)
+  (let ((port (rp:open-input-file string)))
+    (rp:call-with-values
+      (lambda () (proc port))
+      (lambda vals
+	(rp:close-input-port port)
+	(rp:apply rp:values vals)))))
+
+(define (call-with-output-file string proc)
+  (let ((port (rp:open-output-file string)))
+    (rp:call-with-values
+      (lambda () (proc port))
+      (lambda vals
+	(rp:close-output-port port)
+	(rp:apply rp:values vals)))))
+
+(define (list-tail list n)
+  (if (rp:eqv? n 0) list
+    (list-tail (rp:cdr list) (rp:+ n -1))))
+
+(define (string->list string)
+  (let ((n (rp:string-length string)))
+    (if (rp:= n 0) '()
+      (let ((l (rp:list (rp:string-ref string 0))))
+	(do ((i 1 (rp:+ i 1))
+	     (c l (rp:cdr c)))
+	    ((rp:= i n) l)
+	  (rp:set-cdr! c (rp:list (rp:string-ref string i))))))))
+
+(define (list->string list) (rp:apply rp:string list))
+
+(define (string-copy string)
+  (let ((n (rp:string-length string)))
+    (let ((new-string (rp:make-string n)))
+      (do ((i 0 (rp:+ i 1)))
+	  ((rp:= i n) new-string)
+	(rp:string-set! new-string i (rp:string-ref string i))))))
+
+(define (string-fill! string char)
+  (let ((n (rp:string-length string)))
+    (do ((i 0 (rp:+ i 1)))
+	((rp:= i n))
+      (rp:string-set! string i char))))
+
+(define (vector->list vector)
+  (let ((n (rp:vector-length vector)))
+    (if (rp:= n 0) '()
+      (let ((l (rp:list (rp:vector-ref vector 0))))
+	(do ((i 1 (rp:+ i 1))
+	     (c l (rp:cdr c)))
+	    ((rp:= i n) l)
+	  (rp:set-cdr! c (rp:list (rp:vector-ref vector i))))))))
+(define rp:vector->list vector->list)
+
+(define (list->vector list) (rp:apply rp:vector list))
+
+(define (vector-fill! vector obj)
+  (let ((n (rp:vector-length vector)))
+    (do ((i 0 (rp:+ i 1)))
+	((rp:= i n))
+      (rp:vector-set! vector i obj))))
+
+(define (with-input-from-file file thunk)
+  (let ((oport (rp:current-input-port))
+	(nport (rp:open-input-file file)))
+    (rp:call-with-values
+      (lambda ()
+	(rp:dynamic-wind
+	  (lambda () (rp:set-current-input-port nport))
+	  thunk
+	  (lambda () (rp:set-current-input-port oport))))
+      (lambda vals
+	(rp:close-input-port nport)
+	(rp:apply rp:values vals)))))
+
+(define (with-output-to-file file thunk)
+  (let ((oport (rp:current-output-port))
+	(nport (rp:open-output-file file)))
+    (rp:call-with-values
+      (lambda ()
+	(rp:dynamic-wind
+	  (lambda () (rp:set-current-output-port nport))
+	  thunk
+	  (lambda () (rp:set-current-output-port oport))))
+      (lambda vals
+	(rp:close-output-port nport)
+	(rp:apply rp:values vals)))))
+
+(define char-ready? rp:char-ready?)
+(define transcript-on rp:transcript-on)
+(define transcript-off rp:transcript-off)
+(define gensym rp:gensym)
+(define exit rp:exit)
+(define system rp:system)
+(define getenv rp:getenv)
+(define file-exists? rp:file-exists?)
+(define open-input-string rp:open-input-string)
+(define open-output-string rp:open-output-string)
+(define get-output-string rp:get-output-string)
+
+(define complex? number?)
+(define rational? real?)
+
+;;; The following algorithm is taken from IEEE draft P1178/D4.
+(define (rationalize x e)
+  (letrec
+    ((simplest-rational
+       (lambda (x y)
+	 (cond ((rp:< y x) (simplest-rational y x))
+	       ((rp:= x y) x)
+	       ((rp:positive? x) (simplest-rational-positive x y))
+	       ((rp:negative? y) (rp:- (simplest-rational-positive (rp:- y) (rp:- x))))
+	       (else (if (and (rp:exact? x) (rp:exact? y)) 0 0.0)))))
+     (simplest-rational-positive
+       (lambda (x y)
+	 (let ((fx (rp:floor x))
+	       (fy (rp:floor y)))
+	   (cond ((rp:= fx x) fx)
+		 ((rp:= fx fy) (rp:+ fx (rp:/ (simplest-rational-positive (rp:/ (rp:- y fy)) (rp:/ (rp:- x fx))))))
+		 (else (rp:+ 1 fx)))))))
+    (simplest-rational (rp:- x e) (rp:+ x e))))
+
+(define sqrt
+  (let ((sqrt sqrt))
+    (define (integer-sqrt n)
+      (let ((sq (sqrt n)))
+	(if (rp:integer? sq)
+	  (let ((esq (rp:inexact->exact sq)))
+	    (if (rp:eqv? (rp:* esq esq) n) esq sq))
+	  sq)))
+    (lambda (x)
+      (if (rp:exact? x)
+	(rp:/ (integer-sqrt (rp:numerator x)) (integer-sqrt (rp:denominator x)))
+	(sqrt x)))))
+
+(define magnitude
+  (let ((sqrt sqrt))
+    (lambda (z)
+      (let ((re (rp:real-part z)) (im (rp:imag-part z)))
+	(sqrt (rp:+ (rp:* re re) (rp:* im im)))))))
+
+(define angle
+  (let ((atan2 atan))
+    (lambda (z) (atan2 (rp:imag-part z) (rp:real-part z)))))
+
+(define rp:magnitude magnitude)
+(define rp:angle angle)
+
+(define exp
+  (let ((exp exp))
+    (lambda (z) (rp:make-polar (exp (rp:real-part z)) (rp:imag-part z)))))
+
+(define log
+  (let ((log log))
+    (lambda (z) (rp:make-rectangular (log (rp:magnitude z)) (rp:angle z)))))
+
+(let ((rsin sin) (rcos cos) (rsinh rp:sinh) (rcosh rp:cosh) (rtan tan))
+  (set! sin
+    (lambda (z)
+      (if (rp:real? z) (rsin z)
+	(let ((x (rp:real-part z)) (y (rp:imag-part z)))
+	  (rp:make-rectangular (rp:* (rsin x) (rcosh y)) (rp:* (rcos x) (rsinh y)))))))
+  (set! cos
+    (lambda (z)
+      (if (rp:real? z) (rcos z)
+	(let ((x (rp:real-part z)) (y (rp:imag-part z)))
+	  (rp:make-rectangular (rp:* (rcos x) (rcosh y)) (rp:* -1 (rsin x) (rsinh y)))))))
+  (set! tan
+    (lambda (z)
+      (if (rp:real? z) (rtan z)
+	(let ((x (rp:* 2 (rp:real-part z))) (y (rp:* 2 (rp:imag-part z))))
+	  (let ((d (rp:+ (rcos x) (rcosh y))))
+	    (rp:make-rectangular (rp:/ (rsin x) d) (rp:/ (rsinh y) d))))))))
+
+(define sqrt
+  (let ((sqrt sqrt))
+    (lambda (z)
+      (if (rp:real? z)
+	(if (rp:negative? z) (rp:make-rectangular 0 (sqrt (rp:- z))) (sqrt z))
+	(rp:make-polar (sqrt (rp:magnitude z)) (rp:/ (rp:angle z) 2))))))
+
+(let ((rasin asin) (racos acos) (atan2 atan) (sqrt sqrt) (log log))
+  (set! asin
+    (lambda (z)
+      (if (and (rp:real? z) (rp:<= -1 z 1)) (rasin z)
+	(rp:* -i (log (rp:+ (rp:* +i z) (sqrt (rp:- 1 (rp:* z z)))))))))
+  (let ((asin asin) (hpi (atan2 1 0)))
+    (set! acos
+      (lambda (z)
+	(if (and (rp:real? z) (rp:<= -1 z 1)) (racos z) (rp:- hpi (asin z))))))
+  (set! atan
+    (lambda (z . x)
+      (if (rp:null? x)
+	(if (rp:real? z) (atan2 z 1)
+	  (rp:* -1/2i (rp:- (log (rp:+ 1 (rp:* +i z))) (log (rp:- 1 (rp:* +i z))))))
+	(atan2 z (rp:car x))))))
+
+(define expt
+  (let ((expt expt) (exp exp) (log log))
+    (lambda (z1 z2)
+      (letrec
+	((int-expt
+	   (lambda (x n)
+	     (cond ((rp:eqv? n 0) 1)
+		   ((rp:< n 0) (int-expt (rp:/ x) (rp:- n)))
+		   (else
+		     (let loop ((y 1) (x x) (n n))
+		       (cond ((rp:eqv? n 0) y)
+			     ((rp:eqv? n 1) (rp:* y x))
+			     ((rp:odd? n) (loop (rp:* y x) (rp:* x x) (rp:quotient n 2)))
+			     (else (loop y (rp:* x x) (rp:quotient n 2)))))))))
+	 (int-root
+	   (lambda (m n)
+	     (let ((r (expt m (rp:/ n))))
+	       (if (rp:integer? r)
+		 (let ((er (rp:inexact->exact r)))
+		   (if (rp:eqv? (int-expt er n) m) er r))
+		 r))))
+	 (rational-expt
+	   (lambda (m q)
+	     (int-expt (int-root m (rp:denominator q)) (rp:numerator q)))))
+	(if (rp:real? z2)
+	  (if (rp:exact? z2)
+	    (if (rp:integer? z2) (int-expt z1 z2)
+	      (if (and (rp:real? z1) (rp:<= 0 z1))
+		(if (rp:exact? z1)
+		  (rp:/ (rational-expt (rp:numerator z1) z2) (rational-expt (rp:denominator z1) z2))
+		  (expt z1 z2))
+		(exp (rp:* (log z1) z2))))
+	    (if (and (rp:real? z1) (rp:<= 0 z1)) (expt z1 z2) (exp (rp:* (log z1) z2))))
+	  (exp (rp:* (log z1) z2)))))))
+
+(define rp:print-error-message
+  (let ((kmess '#("OS function returned an error"
+		  "Syntax error"
+		  "Premature end of file"
+		  "Out of storage"
+		  "Numerical overflow"
+		  "Division by zero"
+		  "Illegal return value from callback"))
+	(pmess '#("Attempt to evaluate dot list"
+		  "Variable is unbound"
+		  "Attempt to apply illegal object"
+		  "Illegal argument supplied to function"
+		  "Syntax error in primitive expression"
+		  "Too many formal parameters"
+		  "Wrong argument number for function"
+		  "Definition at illegal position"
+		  "Error signaled by program"
+		  "List length of argumants must be equal"
+		  "Evaluator function returned"
+		  "Procedure port is busy"
+		  "Port procedure returned illegal value"
+		  "Variable is read only"))
+	(naobj (rp:void)))
+    (lambda (err obj . p)
+      (let ((port (if (rp:null? p) (rp:current-output-port) (rp:car p))))
+	(cond ((rp:eqv? err 0) naobj)
+	      ((rp:eqv? err 1)
+	       (rp:display (rp:vector-ref kmess 0) port)
+	       (if (rp:not (rp:eqv? obj naobj)) (begin (rp:display " - " port) (rp:display (rp:strerror obj) port))))
+	      ((rp:eqv? err 2)
+	       (rp:display (rp:vector-ref kmess 1) port)
+	       (if (rp:not (rp:eqv? obj naobj)) (begin (rp:display " - " port) (rp:display obj port))))
+	      ((rp:eqv? err 7)
+	       (if (rp:eqv? obj naobj)
+		 (rp:display (rp:vector-ref kmess 6) port)
+		 (begin (rp:display "Could not load shared object - " port) (rp:display obj port))))
+	      ((rp:eqv? err 101)
+	       (if (rp:eqv? obj naobj)
+		 (rp:display (rp:vector-ref pmess 0) port)
+		 (begin (rp:display "Attempt to evaluate illegal object: " port) (rp:write obj port))))
+	      ((rp:memv err '(102 103 105 114))
+	       (rp:display (rp:vector-ref pmess (rp:- err 101)) port)
+	       (if (rp:not (rp:eqv? obj naobj)) (begin (rp:display ": " port) (rp:write obj port))))
+	      ((rp:eqv? err 109)
+	       (if (rp:eqv? obj naobj)
+		 (rp:display (rp:vector-ref pmess 8) port)
+		 (rp:apply (rp:car (rp:cdr obj)) port (rp:cdr (rp:cdr obj)))))
+	      ((rp:<= 1 err (rp:vector-length kmess))
+	       (rp:display (rp:vector-ref kmess (rp:- err 1)) port))
+	      ((rp:<= 1 (rp:- err 100) (rp:vector-length pmess))
+	       (rp:display (rp:vector-ref pmess (rp:- err 101)) port))
+	      (else
+	       (rp:display "Error #" port) (rp:write err port)
+	       (if (rp:not (rp:eqv? obj naobj))
+		 (begin (rp:display " {" port) (rp:write obj port) (rp:display "}" port)))))))))
+
+(define (rp:error-message err obj)
+  (let ((p (rp:open-output-string)))
+    (rp:print-error-message err obj p)
+    (let ((out (rp:get-output-string p))) (rp:close-output-port p) out)))
+
+(define (rp:raise-os-error errno) (rp:error 1 errno))
+
+(define (rp:object->string obj)
+  (let ((p (rp:open-output-string)))
+    (rp:write obj p)
+    (let ((str (rp:get-output-string p))) (rp:close-output-port p) str)))
+
+(define (rp:string->object str)
+  (let ((p (rp:open-input-string str)))
+    (rp:catch-error
+      (lambda (err obj) (rp:close-input-port p) (rp:error err obj))
+      (let ((obj (rp:read p)))
+	(define (had-garbage) (rp:error 2 "string had trailing garbage"))
+	(rp:catch-error
+	  (lambda (err obj)
+	    (case err
+	      ((2 3) (had-garbage))
+	      (else (rp:error err obj))))
+	  (if (rp:eof-object? (rp:read p))
+	    (begin (rp:close-input-port p) obj)
+	    (had-garbage)))))))
+
+(define (rp:export-string str)
+  (let ((nwords (rp:quotient (rp:+ (rp:string-length str) 4) 4)))
+    (let ((buf (rp:make-external-buffer nwords)))
+      (rp:store-external-chars buf 0 str (rp:* nwords 4)) buf)))
+
+(define rp:cast-integer->cardinal #f)
+(define rp:cast-integer->buffer #f)
+(define rp:cast-integer->procedure #f)
+(define rp:cast-cardinal->integer #f)
+(define rp:cast-cardinal->buffer #f)
+(define rp:cast-cardinal->procedure #f)
+(define rp:cast-buffer->integer #f)
+(define rp:cast-buffer->cardinal #f)
+(define rp:cast-buffer->procedure #f)
+(define rp:cast-procedure->integer #f)
+(define rp:cast-procedure->cardinal #f)
+(define rp:cast-procedure->buffer #f)
+
+(let ((cast-buffer (rp:make-external-buffer 1)))
+  (define (cast from to)
+    (lambda (x)
+      (rp:store-external-data cast-buffer 0 (rp:external-arguments from x))
+      (rp:car (rp:load-external-data cast-buffer 0 to))))
+  (set! rp:cast-integer->cardinal (cast 0 '(1)))
+  (set! rp:cast-integer->buffer (cast 0 '(5)))
+  (set! rp:cast-integer->procedure (cast 0 '(6)))
+  (set! rp:cast-cardinal->integer (cast 1 '(0)))
+  (set! rp:cast-cardinal->buffer (cast 1 '(5)))
+  (set! rp:cast-cardinal->procedure (cast 1 '(6)))
+  (set! rp:cast-buffer->integer (cast 5 '(0)))
+  (set! rp:cast-buffer->cardinal (cast 5 '(1)))
+  (set! rp:cast-buffer->procedure (cast 5 '(6)))
+  (set! rp:cast-procedure->integer (cast 6 '(0)))
+  (set! rp:cast-procedure->cardinal (cast 6 '(1)))
+  (set! rp:cast-procedure->buffer (cast 6 '(5))))
+
+(define (rp:pointer=? p1 p2)
+  (rp:= (rp:cast-buffer->integer p1)
+	(rp:cast-buffer->integer p2)))
+
+(define rp:integer-array-load #f)
+(define rp:integer-array-store #f)
+(define rp:cardinal-array-load #f)
+(define rp:cardinal-array-store #f)
+(define rp:buffer-array-load #f)
+(define rp:buffer-array-store #f)
+(define rp:procedure-array-load #f)
+(define rp:procedure-array-store #f)
+
+(let ((array-load (lambda (t) (lambda (b n) (rp:car (rp:load-external-data b (rp:* n 4) t)))))
+      (array-store (lambda (t) (lambda (b n x) (rp:store-external-data b (rp:* n 4) (rp:external-arguments t x))))))
+  (set! rp:integer-array-load (array-load '(0)))
+  (set! rp:integer-array-store (array-store 0))
+  (set! rp:cardinal-array-load (array-load '(1)))
+  (set! rp:cardinal-array-store (array-store 1))
+  (set! rp:buffer-array-load (array-load '(5)))
+  (set! rp:buffer-array-store (array-store 5))
+  (set! rp:procedure-array-load (array-load '(6)))
+  (set! rp:procedure-array-store (array-store 6)))
+
+(define (rp:float-array-load b n) (rp:car (rp:load-external-data b (rp:* n 8) '(2))))
+(define (rp:float-array-store b n x) (rp:store-external-data b (rp:* n 8) (rp:external-arguments 2 (rp:void) 3 x)))
+
+(define (rp:bitwise-invert n) (rp:- (rp:+ n 1)))
+
+(define continue #f)
+
+(define break
+  (letrec ((drln (lambda (l) (let ((c (and (rp:char-ready?) (rp:read-char))))
+			       (if (or (rp:not c) (rp:eof-object? c) (rp:eqv? c #\newline)) l (drln (rp:cons c l))))))
+	   (trim (lambda (l) (if (and (rp:pair? l) (rp:char-whitespace? (rp:car l))) (trim (rp:cdr l)) l))))
+    (lambda arg
+      (rp:call-with-current-continuation
+	(lambda (unbreak)
+	  (let ((prompt (if (rp:null? arg) "break> " (rp:car arg)))
+		(old-sigint (rp:set-signal-handler (cm-sigint-no) #f))
+		(new-sigint #f)
+		(plevel continue)
+		(dmess (let ((inp (rp:current-input-port)) (outp (rp:current-output-port)))
+			 (lambda (m . x) (rp:set-current-input-port inp) (rp:set-current-output-port outp)
+					 (if (rp:not (rp:null? x)) ((rp:car x))) (rp:newline) (m) (rp:newline)))))
+	    (define (read-eval-print)
+	      (rp:catch-error (lambda (err obj) (dmess (lambda () (rp:print-error-message err obj))
+						       (lambda () (drln '()))))
+		(let ((exp (begin (rp:display prompt) (rp:read))))
+		  (if (rp:eof-object? exp) (begin (rp:display "Exit from break loop") (rp:newline) (unbreak #f)))
+		  (let ((g (trim (rp:reverse (trim (drln '()))))))
+		    (if (rp:not (rp:null? g)) (begin (rp:display "Warning: ignoring trailing garbage characters ")
+						     (rp:write (rp:apply rp:string g)) (rp:newline))))
+		  (rp:catch-error (lambda (err obj) (dmess (lambda () (rp:print-error-message err obj))))
+		    (rp:call-with-values
+		      (lambda () (rp:call-evaluator (rp:cons (rp:expand-syntax exp) '()) (rp:top-level-environment)))
+		      (lambda vals (rp:for-each (lambda (v) (rp:write v) (rp:newline)) vals)))))))
+	    (rp:dynamic-wind
+	      (lambda () (rp:set-signal-handler (cm-sigint-no) #f)
+			 (set! continue (lambda () (unbreak #f))))
+	      (lambda ()
+		(rp:call-with-current-continuation
+		  (lambda (t) (set! new-sigint (lambda (sig) (dmess (lambda () (rp:print-signal-message sig))) (t)))))
+		(rp:dynamic-wind
+		  (lambda () (rp:set-signal-handler (cm-sigint-no) new-sigint))
+		  (letrec ((loop (lambda () (read-eval-print) (loop)))) loop)
+		  (lambda () (rp:set-signal-handler (cm-sigint-no) #f))))
+	      (lambda () (set! continue plevel)
+			 (rp:set-signal-handler (cm-sigint-no) old-sigint)))))))))
+
+(define (load file)
+  (let ((port (rp:open-input-file file)))
+    (rp:catch-error (lambda (err obj) (rp:close-input-port port) (rp:error err obj))
+      (do ((exp (rp:read port) (rp:read port)))
+	((rp:eof-object? exp) (rp:close-input-port port))
+	(rp:call-evaluator
+	  (rp:cons (if (and (rp:pair? exp) (rp:eq? (rp:car exp) 'rp:raw-expressions))
+		     (rp:cons 'begin (rp:cdr exp)) (rp:expand-syntax exp)) '())
+	  (rp:top-level-environment))))))
+
+(define (eval exp . ra)
+  (let ((env (if (rp:null? ra) (rp:top-level-environment) (rp:car ra))))
+    (rp:call-evaluator (rp:cons (rp:expand-syntax exp) '()) env)))
+
+(define null-environment #f)
+(define scheme-report-environment #f)
+(define interaction-environment rp:top-level-environment)
+
+(let ((mkev (lambda (sv spc)
+	      (let ((l (rp:vector-length sv)))
+		(let ((vars (rp:make-vector l))
+		      (vals (rp:make-vector l)))
+		  (do ((i 0 (rp:+ i 1))) ((rp:= i l))
+		    (let ((v (rp:vector-ref sv i)))
+		      (rp:vector-set! vars i v)
+		      (rp:vector-set! vals i (rp:symbol-value v))))
+		  (do ((i 0 (rp:+ i 1)) (sp spc (rp:cdr sp)))
+		      ((rp:null? sp))
+		    (rp:vector-set! vals i (rp:car sp)))
+		  (rp:make-closed-environment vars vals)))))
+      (resolvant (rp:derivation (rp:closed-resolver
+'(quote lambda if set! begin rp:define let-syntax letrec-syntax rp:body)
+(rp:map (lambda (x) (rp:cons x (rp:symbol-value x)))
+  '(cond case and or let let* letrec do delay quasiquote define))))))
+  (let ((nullenvs #f) (reptenvs #f))
+    (let ((get-nullenv (lambda (v) (rp:cdr (rp:assv v nullenvs))))
+	  (get-reptenv (lambda (v) (rp:cdr (rp:assv v reptenvs)))))
+      (set! nullenvs `((5 . ,(mkev '#(
+rp:resolvant
+quote rp:lambda if set! begin rp:define
+rp:void rp:memv rp:list rp:cons rp:append rp:vector rp:apply rp:make-promise
+) `(,resolvant)))))
+      (set! reptenvs `((5 . ,(mkev '#(
+rp:resolvant null-environment scheme-report-environment
+quote rp:lambda if set! begin rp:define
+rp:void rp:memv rp:list rp:cons rp:append rp:vector rp:apply rp:make-promise
+eqv? eq? equal?					;6.1 Equivalence predicates
+number? complex? real? rational? integer?	;6.2.5 Numerical operations
+exact? inexact?					;ditto.
+= < > <= >=					;ditto.
+zero? positive? negative? odd? even?		;ditto.
+max min + * - / abs				;ditto.
+quotient remainder modulo			;ditto.
+gcd lcm numerator denominator			;ditto.
+floor ceiling truncate round rationalize	;ditto.
+exp log sin cos tan asin acos atan sqrt expt	;ditto.
+make-rectangular make-polar			;ditto.
+real-part imag-part magnitude angle		;ditto.
+exact->inexact inexact->exact			;ditto.
+number->string string->number			;6.2.6 Numerical input and output
+not boolean?					;6.3.1 Booleans
+pair? cons car cdr set-car! set-cdr!		;6.3.2 Pairs and lists
+caar cadr cdar cddr				;ditto.
+caaar caadr cadar caddr				;ditto.
+cdaar cdadr cddar cdddr				;ditto.
+caaaar caaadr caadar caaddr			;ditto.
+cadaar cadadr caddar cadddr			;ditto.
+cdaaar cdaadr cdadar cdaddr			;ditto.
+cddaar cddadr cdddar cddddr			;ditto.
+null? list? list length append reverse		;ditto.
+list-tail list-ref				;ditto.
+memq memv member				;ditto.
+assq assv assoc					;ditto.
+symbol? symbol->string string->symbol		;6.3.3 Symbols
+char? char=? char<? char>? char<=? char>=?	;6.3.4 Characters
+char-ci=? char-ci<? char-ci<?			;ditto.
+char-ci<=? char-ci>=?				;ditto.
+char-alphabetic? char-numeric? char-whitespace?	;ditto.
+char-upper-case? char-lower-case?		;ditto.
+char->integer integer->char			;ditto.
+char-upcase char-downcase			;ditto.
+string? make-string string			;6.3.5 Strings
+string-length string-ref string-set!		;ditto.
+string=? string-ci=?				;ditto.
+string<? string>? string<=? string>=?		;ditto.
+string-ci<? string-ci>?				;ditto.
+string-ci<=? string-ci>=?			;ditto.
+substring string-append				;ditto.
+string->list list->string			;ditto.
+string-copy string-fill!			;ditto.
+vector? make-vector vector			;6.3.6 Vectors
+vector-length vector-ref vector-set!		;ditto.
+vector->list list->vector vector-fill!		;ditto.
+procedure? apply map for-each force		;6.4 Control features
+call-with-current-continuation			;ditto.
+values call-with-values dynamic-wind		;ditto.
+eval interaction-environment			;6.5 Eval
+call-with-input-file call-with-output-file	;6.6.1 Ports
+input-port? output-port?			;ditto.
+current-input-port current-output-port		;ditto.
+with-input-from-file with-output-to-file	;ditto.
+open-input-file open-output-file		;ditto.
+close-input-port close-output-port		;ditto.
+read read-char peek-char			;6.6.2 Input
+eof-object? char-ready?				;ditto.
+write display newline write-char		;6.6.3 Output
+load transcript-on transcript-off		;6.6.4 System interface
+) `(,resolvant ,get-nullenv ,get-reptenv)))))
+      (set! null-environment get-nullenv)
+      (set! scheme-report-environment get-reptenv))))
+
+(define rp:generate-instance-obj #f)
+(define rp:instance-obj? #f)
+
+(let ((marker (rp:cons 'rp:instance-obj '())))
+  (set! rp:generate-instance-obj
+    (lambda (dispatch) (rp:cons dispatch marker)))
+  (set! rp:instance-obj?
+    (lambda (obj) (and (rp:pair? obj) (rp:eq? (rp:cdr obj) marker)))))
+
+(define (rp:generic-procedure default)
+  (letrec ((generic (lambda (this . args)
+		      (rp:apply (if (rp:instance-obj? this)
+				  (let ((method ((rp:car this) generic)))
+				    (if method method default))
+				  default)
+				this args))))
+    generic))
+
+(define (rp:no-method name)
+  (lambda (this . args)
+    ((rp:exception (rp:no-method name obj)
+       (lambda (port) (rp:display "No method for " port)
+		      (rp:display name port)
+		      (rp:display " to handle " port)
+		      (rp:write obj port)))
+     name this)))
+
+(define (rp:make-object bases . methods)
+  (let ((lut (let loop ((l '()) (m methods))
+	       (if (rp:null? m) l
+		 (loop (rp:cons (rp:cons (rp:car m) (rp:car (rp:cdr m))) l)
+		       (rp:cdr (rp:cdr m)))))))
+    (rp:generate-instance-obj
+      (lambda (msg)
+	(let ((p (rp:assq msg lut)))
+	  (if p (rp:cdr p)
+	    (let loop ((bl bases))
+	      (cond ((rp:null? bl) #f)
+		    (((rp:car (rp:car bl)) msg))
+		    (else (loop (rp:cdr bl)))))))))))
+
+(define (rp:proxy basis msg) ((rp:car basis) msg))
+
+(define (rp:get-options options keywords defaults)
+  (if (rp:null? keywords)
+    (if (rp:null? options) '()
+      ((rp:exception (rp:no-option opt)
+	 (lambda (port) (rp:display "Option " port)
+			(rp:write opt port)
+			(rp:display " is not supported" port)))
+       (rp:car options)))
+    (let ((key (rp:car keywords)))
+      (let next-pair ((found (lambda (l) (rp:get-options l (rp:cdr keywords) (rp:cdr defaults))))
+		      (options options))
+	(if (rp:null? options)
+	  (rp:cons (rp:car defaults) (found '()))
+	  (let ((optname (rp:car options)) (optvnext (rp:cdr options)))
+	    (if (rp:eq? key optname)
+	      (rp:cons (rp:car optvnext) (found (rp:cdr optvnext)))
+	      (next-pair (lambda (l) (found (rp:cons optname (rp:cons (rp:car optvnext) l))))
+			 (rp:cdr optvnext)))))))))
+
+(define (rp:create-channel proc)
+  (let ((contc #f) (contm #f))
+    (let ((s (lambda d
+	       (rp:call-with-current-continuation
+		 (lambda (m) (set! contm m) (rp:apply contc d)))))
+	  (r (lambda ()
+	       (rp:call-with-current-continuation
+		 (lambda (c) (contm (set! contc c)))))))
+      (rp:call-with-current-continuation
+	(lambda (return)
+	  (set! contm (lambda (v) (return s)))
+	  (proc r))))))
+
+(define (rp:with-channel-as-input-port proc)
+  (rp:create-channel
+    (lambda (rcv)
+      (let ((lc (let ((cnt 0))
+		  (rp:cons (lambda () (if cnt (let ((ncnt (rp:+ cnt 1)))
+						(set! cnt (if (rp:< ncnt #x20000000) ncnt #f)))))
+			   (lambda () (if cnt cnt 0)))))
+	    (ready? #f))
+	(proc (rp:open-input-procedure
+		(letrec ((opvec (lambda () (rp:vector getchar ungetchar getlinecount char-ready?)))
+			 (getchar (lambda ()
+				    (let ((ev (rcv)))
+				      (cond ((rp:char? ev) (rp:cons ev (opvec)))
+					    ((rp:pair? ev) (rp:cons ev (opvec)))
+					    ((rp:eq? ev 'eof) (rp:cons #f (opvec)))
+					    ((rp:eq? ev 'newline) ((rp:car lc)) (getchar))
+					    ((rp:boolean? ev) (set! ready? ev) (getchar))))))
+			 (ungetchar (letrec ((cpush (lambda (op c)
+						      (letrec ((nop (rp:vector
+								      (lambda () (rp:cons c op))
+								      (lambda (c) (cpush nop c))
+								      (lambda () (rp:cons ((rp:cdr lc)) nop))
+								      (lambda () (rp:cons #t nop)))))
+							nop))))
+				      (lambda (c) (cpush (opvec) c))))
+			 (getlinecount (lambda () (rp:cons ((rp:cdr lc)) (opvec))))
+			 (char-ready? (lambda () (rp:cons ready? (opvec)))))
+		  (opvec))))))))
+
+(define (rp:with-output-port-as-channel proc)
+  (let ((snd (rp:create-channel proc)))
+    (letrec ((putchar (lambda (c) (snd c) (rp:cons #t putchar))))
+      (rp:open-output-procedure putchar))))
+
+(define rp:fas-write
+  (letrec ((char-safe?
+	     (lambda (c) (and (rp:<= #x21 (rp:char->integer c) #x7e) (rp:not (rp:memv c '(#\\ #\" #\#))))))
+	   (put-nibble
+	     (lambda (n putc) (putc (rp:integer->char (rp:+ n #x40)))))
+	   (put-string
+	     (lambda (s safe? putc putnl)
+	       (let ((l (rp:string-length s)))
+		 (do ((i 0 (rp:+ i 1)))
+		   ((rp:= i l) (putnl))
+		   (let ((c (rp:string-ref s i)))
+		     (if (safe? c) (putc c)
+		       (let ((x (rp:char->integer c)))
+			 (putc #\#)
+			 (put-nibble (rp:quotient x 16) putc)
+			 (put-nibble (rp:remainder x 16) putc))))))))
+	   (register-literal
+	     (lambda (comp literals nlits obj output collector)
+	       (let lookup ((n nlits) (l literals))
+		 (cond ((rp:zero? n) (output) (collector (rp:cons obj literals) (rp:+ nlits 1) `(literal ,nlits)))
+		       ((comp obj (rp:car l)) (collector literals nlits `(literal ,(rp:- n 1))))
+		       (else (lookup (rp:- n 1) (rp:cdr l)))))))
+	   (make-obj-desc
+	     (lambda (literals nlits obj putc putnl collector)
+	       (cond ((rp:symbol? obj)
+		      (register-literal
+			rp:eq? literals nlits obj
+			(lambda ()
+			  (let ((s (rp:symbol->string obj)))
+			    (if (rp:eq? obj (rp:string->symbol s))
+			      (begin (putc #\s) (put-string s char-safe? putc putnl))
+			      (begin (putc #\g) (putnl)))))
+			collector))
+		     ((rp:number? obj)
+		      (if (and (rp:integer? obj) (rp:exact? obj) (rp:<= #x-20000000 obj #x1fffffff))
+			(collector literals nlits `(shortnum ,obj))
+			(register-literal
+			  rp:eqv? literals nlits obj
+			  (lambda () (putc #\n) (put-string (rp:number->string obj) char-safe? putc putnl))
+			  collector)))
+		     ((rp:string? obj)
+		      (register-literal
+			(lambda (x y) (and (rp:string? y) (rp:string=? x y)))
+			literals nlits obj (lambda () (putc #\S) (put-string obj char-safe? putc putnl)) collector))
+		     ((rp:boolean? obj) (collector literals nlits `(immediate ,(if obj #\t #\f))))
+		     ((rp:null? obj) (collector literals nlits '(immediate #\n)))
+		     ((synmark? obj) (collector literals nlits '(immediate #\m)))
+		     ((rp:char? obj) (collector literals nlits `(character ,obj)))
+		     ((rp:pair? obj)
+		      (make-obj-desc literals nlits (rp:car obj) putc putnl
+			(lambda (literals nlits x)
+			  (make-obj-desc literals nlits (rp:cdr obj) putc putnl
+			    (lambda (literals nlits y) (collector literals nlits `(pair ,x ,y)))))))
+		     ((rp:vector? obj)
+		      (let ((n (rp:vector-length obj)))
+			(letrec ((do-elt (lambda (i elts literals nlits)
+					   (if (rp:= i n)
+					     (collector literals nlits `(vector ,n ,@(rp:reverse elts)))
+					     (make-obj-desc literals nlits (rp:vector-ref obj i) putc putnl
+					       (lambda (literals nlits x)
+						 (do-elt (rp:+ i 1) (rp:cons x elts) literals nlits)))))))
+			  (do-elt 0 '() literals nlits))))
+		     (else ((rp:exception (rp:fasl-botch obj)
+			      (lambda (port) (rp:display "Unrepresentable object " port)
+					     (rp:write obj port)))
+			    obj)))))
+	   (put-obj-desc
+	     (lambda (desc putc putnl)
+	       (case (rp:car desc)
+		 ((literal) (putc #\l) (put-string (rp:number->string (rp:car (rp:cdr desc))) true? putc putnl))
+		 ((immediate) (putc (rp:car (rp:cdr desc))) (putnl))
+		 ((shortnum) (let ((n (rp:car (rp:cdr desc))))
+			       (if (rp:< n 0)
+				 (begin (putc #\j) (put-string (rp:number->string (rp:- n)) true? putc putnl))
+				 (begin (putc #\i) (put-string (rp:number->string n) true? putc putnl)))))
+		 ((character) (putc #\c)
+			      (let ((x (rp:char->integer (rp:car (rp:cdr desc)))))
+				(put-nibble (rp:quotient x 16) putc)
+				(put-nibble (rp:remainder x 16) putc))
+			      (putnl))
+		 ((pair) (do ((desc desc (rp:car (rp:cdr (rp:cdr desc)))) (l 0 (rp:+ l 1)))
+			     ((rp:not (rp:eq? (rp:car desc) 'pair))
+			      (if (rp:equal? desc '(immediate #\n))
+				(putc #\p)
+				(begin (put-obj-desc desc putc putnl) (putc #\P)))
+			      (put-string (rp:number->string l) true? putc putnl))
+			   (put-obj-desc (rp:car (rp:cdr desc)) putc putnl)))
+		 ((vector) (do ((el (rp:cdr (rp:cdr desc)) (rp:cdr el)))
+			     ((rp:null? el) (putc #\v)
+					    (put-string (rp:number->string (rp:car (rp:cdr desc))) true? putc putnl))
+			     (put-obj-desc (rp:car el) putc putnl))))))
+	   (true? (lambda (c) #t))
+	   (synmark? (let ((m (rp:syntax-mark))) (lambda (obj) (rp:eq? obj m)))))
+    (lambda (obj putc prefix . opt)
+      (let ((putnl (or (and (rp:not (rp:null? opt)) (rp:car opt)) (lambda () (putc #\newline)))))
+	(if prefix
+	  (let ((ps (if (rp:eq? prefix #t) "fasl//pi" prefix)))
+	    (putc #\#) (putc #\!) (put-string ps true? putc (lambda () (putc #\newline)))))
+	(put-obj-desc (make-obj-desc '() 0 obj putc putnl (lambda (literals nlits x) (putc #\z) (putnl) x)) putc putnl)
+	(putc #\#)))))
+
+(rp:register-read-dispatcher #\!
+  (let ((myname
+	 (let ((s (rp:vector-ref (rp:command-line-arguments) 0)))
+	   (let ((len (rp:string-length s)))
+	     (let loop ((i (rp:- len 1)) (l '()))
+	       (if (rp:< i 0) l
+		 (let ((c (rp:string-ref s i)))
+		   (if (rp:eqv? c (cm-path-separate-char)) l
+		     (loop (rp:- i 1) (rp:cons c l))))))))))
+    (lambda (char s-dat result synerr getc read)
+      (letrec ((verify-header (lambda (char s-dat cl1 cl2)
+				(if (rp:char-whitespace? char)
+				  (if (or (and (rp:null? cl2) (rp:eqv? char #\newline)) (rp:null? cl1))
+				    (drain-line char s-dat)
+				    (synerr #f "fasload header mismatch" s-dat))
+				  (let ((cl1 (if (rp:eqv? char (cm-path-separate-char)) myname
+					       (and (rp:pair? cl1) (rp:eqv? char (rp:car cl1)) (rp:cdr cl1))))
+					(cl2 (and (rp:pair? cl2) (rp:eqv? char (rp:car cl2)) (rp:cdr cl2))))
+				    (getc s-dat (lambda (char s-dat) (verify-header char s-dat cl1 cl2)) #t)))))
+	       (drain-line (lambda (char s-dat)
+			     (if (rp:eqv? char #\newline)
+			       (rp:fas-read s-dat result synerr getc)
+			       (getc s-dat drain-line #t)))))
+	(getc s-dat (lambda (char s-dat) (verify-header char s-dat myname '(#\f #\a #\s #\l #\/ #\/ #\p #\i))) #t)))))
+
+(define rp:dbg-debugging? #f)
+(define rp:dbg-set-flag #f)
+
+(let ((debug-flags '()))
+  (set! rp:dbg-debugging?
+    (lambda (type)
+      (cond ((rp:assq type debug-flags) => cdr)
+	    (else #f))))
+  (set! rp:dbg-set-flag
+    (lambda (type flag)
+      (cond ((rp:assq type debug-flags) => (lambda (p) (set-cdr! p flag)))
+	    (else (set! debug-flags (cons (cons type flag) debug-flags)))))))
+
+(define (rp:dbg-type-checker err-proc types . args)
+  (let loop ((types types) (args args) (i 0))
+    (if (rp:null? types) #t
+      (let ((val (rp:car args)))
+	(if (case (rp:car types)
+	      ((integer) (and (rp:number? val) (rp:integer? val) (rp:exact? val) (rp:<= #x-80000000 val #x7fffffff)))
+	      ((cardinal) (and (rp:number? val) (rp:integer? val) (rp:exact? val) (rp:<= 0 val #xffffffff)))
+	      ((float) (and (rp:number? val) (rp:not (rp:exact? val))))
+	      ((buffer) (if val (rp:external-buffer? val) #t))
+	      ((procedure) (if val (rp:exported-procedure? val) #t)))
+	  (loop (rp:cdr types) (rp:cdr args) (rp:+ i 1))
+	  (err-proc i (rp:car types) val))))))
+
+(define rp:identify-platform
+  (let ((ans (delay (cm-platform-id))))
+    (lambda () (force ans))))
+
+(define *invocation-arg* (vector->list (rp:command-line-arguments)))

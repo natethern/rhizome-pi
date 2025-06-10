@@ -1,0 +1,66 @@
+
+
+
+PISC(1)                                                   PISC(1)
+
+
+NNAAMMEE
+       pisc - A Scheme Compiler
+
+SSYYNNOOPPSSIISS
+       ppiisscc --hheellpp
+       ppiisscc [ _o_p_t_i_o_n_s ] _f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+       If  invoked  with --hheellpp option, ppiisscc Outputs brief summary
+       of command line syntax. Otherwise ppiisscc  Converts  _f_i_l_e  to
+       program in C language.
+
+OOPPTTIIOONNSS
+       --mmoodduullee _m_o_d_u_l_e_-_i_d_e_n_t_i_f_i_e_r
+              Gives  module  name _m_o_d_u_l_e_-_i_d_e_n_t_i_f_i_e_r_.  Module name
+              is a name you specify to pisl  when  creating  exe-
+              cutable.  This must be a valid identifier in C lan-
+              guage. Default is the name of source  file  without
+              ".scm" suffix (if the file name had one.)
+
+       --oouuttppuutt _f_i_l_e_n_a_m_e
+              Specifies  file  name  of output. Defualt is module
+              name with ".c" suffix.
+
+       --mmppaatthh _d_i_r
+              Add named directory to search path of rp:use-macro-
+              package.  This option may be used multiple times.
+
+       --llooaadd _f_i_l_e_n_a_m_e
+              Loads  named  file into the environment of compiler
+              befor reading source file. This may be used in  the
+              purpose  of  defining  macros at compile time. This
+              option may be used multiple times.
+
+AAUUTTHHOORR
+       INUJIMA Masaru (qfwfq@kt.rim.or.jp).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            Rhizome/pi                          1
+
+

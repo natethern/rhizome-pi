@@ -1,0 +1,99 @@
+<html>
+<!-- $Id: index-e.html,v 1.10 2005/11/10 08:47:34 qfwfq Exp $ -->
+
+<head>
+<meta name="keywords" content="scheme r5rs lisp interpreter compiler unix win32">
+<title>rhizome/pi</title>
+</head>
+
+<body>
+Japanese version of document is <a href=".">here</a>.
+<h5 align=right>
+Qfwfq Opus 1
+<br>
+Dedicated to the memory of ALGOL N
+<br>
+INUJIMA, Masaru <a href="mailto:qfwfq@kt.rim.or.jp">qfwfq@kt.rim.or.jp</a>
+</h5>
+
+<h1 align=left>rhizome/pi</h1>
+
+rhizome/pi is a Scheme implementation (interpreter and compiler,
+compiler generates program in C language) conforming to
+<a href="ftp://swissnet.ai.mit.edu/pub/scheme-reports/">R^5RS</a>.
+<ul>
+  <li>Download
+      <a href="http://www.kt.rim.or.jp/~qfwfq/packages/rhizome-0.57.tar.gz">
+      rhizome-0.57.tar.gz</a>.
+</ul>
+<a href="#Character">Characteristics</a>/
+<a href="#Environment">Supported environments</a>/
+<a href="#Others">Other documents</a>
+
+<a name="Character"><h2>Characteristics</h2></a>
+<ul>
+  <li>
+    It is implemented completely in continuation passing style.
+    Being so, it never makes recurseive call in machine labguage
+    level, and depth of stack is bound to finite constant (I did
+    not investigate the precise limit, but it must be no greater
+    than 1 kilobytes.)
+  <li>
+    Application of call-with-current-continuation and resulting
+    comtinuation object is very fast. Execution time of them is
+    no greater than normal procedures (such as car, cdr, cons.)
+  <li>
+    Employes syntax-case as low level macro system.
+  <li>
+    Aside from trace, there is a debugger capable of single stepping
+    of LISP code. This debugger itself is mostly written in LISP
+    code, and implementing custom debugging feature is also possible
+    (but, procedures for hooking evaluator are not fully documented
+    yet.)
+  <li>
+    Handling errors and signals are possible.
+  <li>
+    There is no limitation of program which may be compiled. Execution
+    of compiled program is done simillary to loading, by sequential
+    evaluation of top level expressions.
+  <li>
+    Shared objects (DLLs in term of Win32) can be loaded dynamically
+    and functions in them can be called from scheme code. Moreover,
+    callbacks can be written in scheme code.
+    See <a href="extfunc-e.txt">doc/extfunc</a> for details.
+</ul>
+  This implementation is not aimed to solely as tools for study of
+  so called artificial intelligence, but intended to be used as a
+  general purpose developing and executing environment of applications.
+<p>
+  rhizome/kappa is a indivisual package consisting of runtime routines
+  of rhizome/pi, which will be useful in other symbolic processing languages.
+
+<a name="Environment"><h2>Supported environments</h2></a>
+  The author tested the program under following environments and C compilers.
+<ul>
+  <li>OpenBSD 3.7 i386
+  <li>Linux i386
+  <li>Win32 (intel) with Microsoft, Borland or lcc-win32 C compiler
+  <li>Win32 (intel) with Cygwin environment
+</ul>
+  There should be no serious problems in porting to other
+  <a href="http://www.netbsd.org/Misc/call-it-a-duck.html">
+  unix like operating systems</a>.
+
+<a name="Others"><h2>Other documents</h2></a>
+<ul>
+  <li><a href="install-e.html">Installation instructions.</a>
+  <li>How to use it.
+      <ul>
+	<li><a href="invoke-e.html">Usage of interpreter and compiler.</a>
+	<li><a href="procs-e.html">Procedures and such proper to rhizome/pi.</a>
+	<li><a href="debugger-e.html">Usage of debugger.</a>
+	<li><a href="caveat-e.html">Other notes.</a>
+      </ul>
+</ul>
+<hr>
+<h5>Home of INUJIMA aka
+<a href="http://www.kt.rim.or.jp/~qfwfq/index-e.html">Qfwfq</a></h5>
+</body>
+</html>

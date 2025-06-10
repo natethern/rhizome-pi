@@ -1,0 +1,184 @@
+# @(#)$Header: /u/master/rhizome/config/win32/msc/Makefile.pi.compiler,v 1.1 1999/06/15 07:15:11 qfwfq Exp $
+# $Log: Makefile.pi.compiler,v $
+# Revision 1.1  1999/06/15 07:15:11  qfwfq
+# Rearrange configuration files.
+#
+
+CENVIRON=ms
+LIBVERSION=0
+
+DLLBASE=rhzpi$(CENVIRON)$(LIBVERSION)
+
+RM=del /f
+
+LIB_PISLFLAGS = -cc "cl -nologo -Zm1000 -O1 -w -DWIN32 -DRK_BIND_STATIC -DRP_MODLIB -I.. -I..\..\include -c"
+APP_PISLFLAGS = -cc "cl -nologo -Zm1000 -O1 -w -DWIN32 -I.. -I..\..\include -c"
+AR = lib -nologo
+LD = link -nologo -opt:noicf
+LIBBASE = -base:0x14000000
+INCMAIN = -include:_main
+PISLLIB = -nolib -aux .\$(DLLBASE).lib
+RMEXP = $(RM)
+
+PROGS = pisc.exe pisf.exe pisl.exe pi.exe piw.exe # pinw.exe
+
+IOBJS = rp_fasr.obj rp_priv.obj rp_stdm.obj rp_debg.obj rp_dbgm.obj rp_schm.obj rp_topl.obj rp_expn.obj rp_stds.obj \
+	rp_dbgs.obj rp_sacc.obj rp_extc.obj rp_pi.obj
+WOBJS = rp_wwsyn.obj rp_wwutl.obj rp_wwapi.obj rp_wwbas.obj rp_wwui.obj rp_wwdlg.obj rp_wwtrm.obj
+
+BOOTPISC = ..\pi_boot ..\bootrc.pi ..\interprt bootpisc.scm
+BOOTPISF = ..\pi_boot ..\bootrc.pi ..\interprt bootpisf.scm
+WWOPTS = -load ..\interprt\stracces.pi -load ..\interprt\extcall.pi \
+	 -load ..\win32\wwsyntax.scm -mpath ..\win32\win32mcr
+LIB_BOOTPISL = ..\pi_boot ..\bootrc.pi ..\interprt bootpisl.scm $(LIB_PISLFLAGS)
+APP_BOOTPISL = ..\pi_boot ..\bootrc.pi ..\interprt bootpisl.scm $(APP_PISLFLAGS)
+PISCAUX = rp_wwsyn:
+PIWAUX = rp_wwsyn: rp_wwutl: rp_wwapi: rp_wwbas: rp_wwui: rp_wwdlg: rp_wwtrm:
+
+.SUFFIXES:
+.SUFFIXES: .obj .scm
+
+.scm.obj:
+	$(BOOTPISC) $<
+	$(APP_BOOTPISL) -nold $*
+
+all: rhzscm.lib rhzww.lib $(DLLBASE).dll $(PROGS)
+
+install: all
+	for %x in (rhzscm.lib rhzww.lib $(DLLBASE).lib) do copy %x $(LIBDIR)
+	for %x in ($(DLLBASE).dll $(PROGS)) do copy %x $(BINDIR)
+	cd ..\win32\win32mcr
+	for %m in (*.scm) do ..\..\compiler\pisf -output $(LIBDIR)\%m -load w_base.scm %m
+	cd ..\..\compiler
+
+rhzscm.lib: $(IOBJS)
+	$(AR) -out:rhzscm.lib $**
+
+rhzww.lib: $(WOBJS)
+	$(AR) -out:rhzww.lib $**
+
+$(DLLBASE).dll: $(IOBJS) $(WOBJS)
+	$(LD) -dll $(LIBBASE) $(INCMAIN) -out:$@ $** ..\rhzpi.lib ..\..\kappa\rhizome.lib
+	@$(RMEXP) $*.exp
+
+rp_fasr.obj: ..\interprt\fasread.pi
+	$(BOOTPISC) -module rp_fasr ..\interprt\fasread.pi
+	$(LIB_BOOTPISL) -nold rp_fasr
+
+rp_priv.obj: ..\interprt\privates.pi
+	$(BOOTPISC) -module rp_priv ..\interprt\privates.pi
+	$(LIB_BOOTPISL) -nold rp_priv
+
+rp_stdm.obj: ..\interprt\stdmacro.pi
+	$(BOOTPISC) -module rp_stdm ..\interprt\stdmacro.pi
+	$(LIB_BOOTPISL) -nold rp_stdm
+
+rp_debg.obj: ..\interprt\debugger.pi
+	$(BOOTPISC) -module rp_debg ..\interprt\debugger.pi
+	$(LIB_BOOTPISL) -nold rp_debg
+
+rp_dbgm.obj: ..\interprt\dbgmacro.pi
+	$(BOOTPISC) -module rp_dbgm ..\interprt\dbgmacro.pi
+	$(LIB_BOOTPISL) -nold rp_dbgm
+
+rp_schm.obj: ..\interprt\scheme.pi
+	$(BOOTPISC) -module rp_schm ..\interprt\scheme.pi
+	$(LIB_BOOTPISL) -nold rp_schm
+
+rp_topl.obj: ..\interprt\toplevel.pi
+	$(BOOTPISC) -module rp_topl ..\interprt\toplevel.pi
+	$(LIB_BOOTPISL) -nold rp_topl
+
+rp_expn.obj: ..\interprt\expand.pi
+	$(BOOTPISC) -module rp_expn ..\interprt\expand.pi
+	$(LIB_BOOTPISL) -nold rp_expn
+
+rp_stds.obj: ..\interprt\stdsyn.pi
+	$(BOOTPISC) -module rp_stds ..\interprt\stdsyn.pi
+	$(LIB_BOOTPISL) -nold rp_stds
+
+rp_dbgs.obj: ..\interprt\dbgsyn.pi
+	$(BOOTPISC) -module rp_dbgs ..\interprt\dbgsyn.pi
+	$(LIB_BOOTPISL) -nold rp_dbgs
+
+rp_sacc.obj: ..\interprt\stracces.pi
+	$(BOOTPISC) -module rp_sacc ..\interprt\stracces.pi
+	$(LIB_BOOTPISL) -nold rp_sacc
+
+rp_extc.obj: ..\interprt\extcall.pi
+	$(BOOTPISC) -module rp_extc ..\interprt\extcall.pi
+	$(LIB_BOOTPISL) -nold rp_extc
+
+rp_pi.obj: ..\interprt\pi.pi
+	$(BOOTPISC) -module rp_pi ..\interprt\pi.pi
+	$(LIB_BOOTPISL) -nold rp_pi
+
+rp_wwsyn.obj: ..\win32\wwsyntax.scm
+	$(BOOTPISC) -module rp_wwsyn $(WWOPTS) ..\win32\wwsyntax.scm
+	$(LIB_BOOTPISL) -nold rp_wwsyn
+
+rp_wwutl.obj: ..\win32\wwutils.scm
+	$(BOOTPISC) -module rp_wwutl $(WWOPTS) ..\win32\wwutils.scm
+	$(LIB_BOOTPISL) -nold rp_wwutl
+
+rp_wwapi.obj: ..\win32\win32api.scm
+	$(BOOTPISF) -module rp_wwapi $(WWOPTS) ..\win32\win32api.scm
+	$(LIB_BOOTPISL) -nold rp_wwapi
+
+rp_wwbas.obj: ..\win32\wwbase.scm
+	$(BOOTPISC) -module rp_wwbas $(WWOPTS) ..\win32\wwbase.scm
+	$(LIB_BOOTPISL) -nold rp_wwbas
+
+rp_wwui.obj: ..\win32\wwui.scm
+	$(BOOTPISF) -module rp_wwui $(WWOPTS) ..\win32\wwui.scm
+	$(LIB_BOOTPISL) -nold rp_wwui
+
+rp_wwdlg.obj: ..\win32\wwdlg.scm
+	$(BOOTPISF) -module rp_wwdlg $(WWOPTS) ..\win32\wwdlg.scm
+	$(LIB_BOOTPISL) -nold rp_wwdlg
+
+rp_wwtrm.obj: ..\win32\wwterm.scm
+	$(BOOTPISF) -module rp_wwtrm $(WWOPTS) ..\win32\wwterm.scm
+	$(LIB_BOOTPISL) -nold rp_wwtrm
+
+pisc.exe: utils.obj pisc.obj $(DLLBASE).dll
+	$(APP_BOOTPISL) -o $@ -aux utils.obj -aux pisc.obj -xm debugger $(PISCAUX) $(PISLLIB) utils: pisc:
+	@$(RMEXP) $*.exp $*.lib
+
+pisf.exe: utils.obj pisf.obj $(DLLBASE).dll
+	$(APP_BOOTPISL) -o $@ -aux utils.obj -aux pisf.obj -xm debugger $(PISCAUX) $(PISLLIB) utils: pisf:
+	@$(RMEXP) $*.exp $*.lib
+
+pisl.exe: utils.obj pisl.obj $(DLLBASE).dll
+	$(APP_BOOTPISL) -o $@ -aux utils.obj -aux pisl.obj -xm stdmacro -xm debugger -xm extcall -xm saccess $(PISLLIB) utils: pisl:
+	@$(RMEXP) $*.exp $*.lib
+
+pi.exe: $(DLLBASE).dll
+	$(APP_BOOTPISL) -o $@ $(PISLLIB) rp_pi:
+	@$(RMEXP) $*.exp $*.lib
+
+piw.exe: $(DLLBASE).dll
+	$(APP_BOOTPISL) -windows -o $@ $(PIWAUX) $(PISLLIB) rp_pi:
+	@$(RMEXP) $*.exp $*.lib
+
+pinw.exe: $(DLLBASE).dll
+	$(APP_BOOTPISL) -o $@ $(PIWAUX) $(PISLLIB) rp_pi:
+	@$(RMEXP) $*.exp $*.lib
+
+test: pisc.exe
+	$(BOOTPISC) -output t.c.i t.scm
+	pisc t.scm
+	fc t.c.i t.c
+	pisc -output pisc.c.c pisc.scm
+	fc pisc.c pisc.c.c
+	..\pi_boot ..\bootrc.pi ..\interprt t.scm > t.out.i
+	$(APP_BOOTPISL) -xm stdmacro -xm debugger -xm stdproc -xm extcall -xm saccess $(PISLLIB) t
+	a > t.out.c
+	fc t.out.i t.out.c
+	@echo Scheme compiler pisc seems to ran OK.
+
+clean:
+	-$(RM) *.c *.obj a.* *.c.i t.out.?
+
+clobber: clean
+	-$(RM) $(PROGS) $(DLLBASE).dll $(DLLBASE).lib rhzscm.lib rhzww.lib

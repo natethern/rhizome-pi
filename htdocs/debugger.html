@@ -1,0 +1,346 @@
+<html>
+<!-- $Id: debugger.html,v 1.2 1997/04/26 13:28:58 qfwfq Exp $ -->
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-2022-JP">
+<title>rhizome/pi debugger</title>
+</head>
+
+<body>
+<ul>
+  <li><a href="#Step">step</a>
+  <li><a href="#Trace">trace</a>
+  <li><a href="#Trap">trap</a>
+  <li><a href="#Untrace">untrace</a>
+  <li><a href="#Trerr">trace-error</a>
+</ul>
+
+<a name="Step"><h2><code>(step <var>expression</var>)</code></h2></a>
+  <code><var>expression</var></code>
+  の評価をステップ実行する。以下の状況で利用者との対話が行われる。
+<dl>
+  <dt><code>Eval: <var>expression</var> ?</code>
+  <dd><code><var>expression</var></code> を評価しようとしている。
+      以下のコマンドが使用できる。
+      <table>
+      <tr>
+	<td valign=top>(改行)</td>
+	<td>引続きステップ実行を行う。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>n</code></td>
+	<td><code><var>expression</var></code> が値を返すまで通常の実行を行う。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>r</code></td>
+	<td>式の入力を求められる。入力した式がトップレベルの環境で評価され
+	    <code><var>expression</var></code> の値のかわりに使用される。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>e</code></td>
+	<td>式の入力を求められる。入力した式が
+	    <code><var>expression</var></code> と同じ環境で評価され、
+	    その値が表示される。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>b</code></td>
+	<td><code>(break)</code> を実行する。</td>
+      </tr>
+      </table>
+<p>
+  <dt><code>Tail recursion: <var>expression</var> ?</code>
+  <dd><code><var>expression</var></code>
+      を末尾再帰の状況で評価しようとしている。使用できるコマンドは
+      <code>Eval:</code> におけるものと同じ。
+<p>
+  <dt><code>Return: <var>value</var> ?</code>
+  <dd><code><var>value</var></code> が評価値として求められた。
+      以下のコマンドが使用できる。
+      <table>
+      <tr>
+	<td valign=top>(改行)</td>
+	<td>引続きステップ実行を行う。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>r</code></td>
+	<td>式の入力を求められる。入力した式がトップレベルの環境で評価され
+	    <code><var>value</var></code> のかわりに使用される。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>b</code></td>
+	<td><code>(break)</code> を実行する。</td>
+      </tr>
+      </table>
+</dl>
+  補足
+<ol>
+  <li>評価するリストの第一要素が変数の場合、その変数の評価過程が表示され
+      るのはそのリストがはじめて評価される時のみである。
+  <li><code>step</code> はマクロ展開の過程までステップ実行する。
+      ただし一度展開されたマクロ呼び出しは元の式に置き換えられるので、
+      展開がステップ実行されるのは呼び出しの最初の評価のみとなる。
+  <li>デバッガの出力はリストやベクタが長すぎる、あるいは入れ子が深すぎる
+      場合は一部省略される。これは大域変数 <code>*print-depth*</code> 及び
+      <code>*print-length*</code> で制御されるが、省略がおこらないように
+      するにはこれらに <code>#f</code> をセットすればよい。<br>
+      式が <code>[]</code> に囲まれて表示されるのはその式がマクロ展開の
+      対象であることを示している。
+</ol>
+  実行例
+<pre>
+pi: (step (tak 3 2 1))
+Eval: [(rp:body (tak 3 2 1))] ? ?
+step n}ext r}eturn e}val b}reak
+Eval: [(rp:body (tak 3 2 1))] ? 
+Tail recursion: (begin [(tak 3 2 1)]) ? 
+ Eval: begin ? 
+ Return: #&lt;101A3A48&gt; ? 
+Tail recursion: [(tak 3 2 1)] ? 
+Tail recursion: ([tak] [3] [2] [1]) ? 
+ Eval: [tak] ? 
+ Tail recursion: tak ? 
+ Return: #&lt;101AA288&gt; ? 
+ Eval: [3] ? 
+ Tail recursion: 3 ? 
+ Return: 3 ? 
+ Eval: [2] ? n
+ Return: 2 ? 
+ Eval: [1] ? n
+ Return: 1 ? 
+Tail recursion: [(rp:body (if (not (&lt; y x)) z (tak (tak ## y z) (tak ## z x) (tak ## x y))))] ? 
+Tail recursion: (begin [(if (not (&lt; y x)) z (tak (tak ## y z) (tak ## z x) (tak ## x y)))]) ? 
+ Eval: begin ? 
+ Return: #&lt;101A3A48&gt; ? 
+Tail recursion: [(if (not (&lt; y x)) z (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)))] ? ?
+step n}ext r}eturn e}val b}reak
+Tail recursion: [(if (not (&lt; y x)) z (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)))] ? 
+Tail recursion: (if [(not (&lt; y x))] [z] [(tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y))]) ? 
+ Eval: if ? 
+ Return: #&lt;101A39F0&gt; ? 
+ Eval: [(not (&lt; y x))] ? n
+ Return: #f ? ?
+step r}eturn b}reak
+ Return: #f ? 
+Tail recursion: [(tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y))] ? 
+Tail recursion: ([tak] [(tak (- x 1) y z)] [(tak (- y 1) z x)] [(tak (- z 1) x y)]) ? 
+ Eval: [tak] ? n
+ Return: #&lt;101AA288&gt; ? 
+ Eval: [(tak (- x 1) y z)] ? b
+break&gt; (continue)
+ Eval: [(tak (- x 1) y z)] ? n
+ Return: 1 ? r
+Value? 2
+ Eval: [(tak (- y 1) z x)] ? r
+Value? 1
+ Eval: [(tak (- z 1) x y)] ? 
+ Tail recursion: ([tak] [(- z 1)] [x] [y]) ? 
+  Eval: [tak] ? n
+  Return: #&lt;101AA288&gt; ? 
+  Eval: [(- z 1)] ? n
+  Return: 0 ? 
+  Eval: [x] ? n
+  Return: 3 ? 
+  Eval: [y] ? n
+  Return: 2 ? 
+ Tail recursion: (if-parsed (not (&lt; #&lt;G.00000003&gt; #&lt;G.00000002&gt;)) #&lt;G.00000004&gt; (tak (tak (- #&lt;G.00000002&gt; 1) #&lt;G.00000003&gt; #&lt;G.00000004&gt;) [(tak (- y 1) z x)] (tak (- #&lt;G.00000004&gt; 1) #&lt;G.00000002&gt; #&lt;G.00000003&gt;))) ? n
+ Return: 2 ? 
+Tail recursion: (if-parsed (not (&lt; #&lt;G.00000003&gt; #&lt;G.00000002&gt;)) #&lt;G.00000004&gt; (tak (tak (- #&lt;G.00000002&gt; 1) #&lt;G.00000003&gt; #&lt;G.00000004&gt;) [(tak (- y 1) z x)] (tak (- #&lt;G.00000004&gt; 1) #&lt;G.00000002&gt; #&lt;G.00000003&gt;))) ? 
+ Eval: (not (&lt; #&lt;G.00000003&gt; #&lt;G.00000002&gt;)) ? 
+  Eval: (&lt; #&lt;G.00000003&gt; #&lt;G.00000002&gt;) ? 
+   Eval: #&lt;G.00000003&gt; ? 
+   Return: 1 ? 
+   Eval: #&lt;G.00000002&gt; ? 
+   Return: 2 ? 
+  Return: #t ? 
+ Return: #f ? 
+Tail recursion: (tak (tak (- #&lt;G.00000002&gt; 1) #&lt;G.00000003&gt; #&lt;G.00000004&gt;) [(tak (- y 1) z x)] (tak (- #&lt;G.00000004&gt; 1) #&lt;G.00000002&gt; #&lt;G.00000003&gt;)) ? r
+Value? 'foo
+Return: foo ? 
+foo
+pi: (step (let ((x 0) (y 1)) (cons x y)))
+Eval: [(rp:body (let ((x 0) (y 1)) (cons x y)))] ? 
+Tail recursion: (begin [(let ((x 0) (y 1)) (cons x y))]) ? 
+ Eval: begin ? 
+ Return: #&lt;101A3A48&gt; ? 
+Tail recursion: [(let ((x 0) (y 1)) (cons x y))] ? 
+Tail recursion: ([(lambda (x y) (cons x y))] [0] [1]) ? 
+ Eval: [(lambda (x y) (cons x y))] ? 
+ Tail recursion: (rp:lambda (#&lt;G.00000009&gt; #&lt;G.0000000A&gt;) [(rp:body (cons x y))]) ? 
+  Eval: rp:lambda ? 
+  Return: #&lt;101A39D8&gt; ? 
+ Return: #&lt;000FC788&gt; ? 
+ Eval: [0] ? n
+ Return: 0 ? 
+ Eval: [1] ? n
+ Return: 1 ? 
+Tail recursion: [(rp:body (cons x y))] ? 
+Tail recursion: (begin [(cons x y)]) ? 
+ Eval: begin ? 
+ Return: #&lt;101A3A48&gt; ? 
+Tail recursion: [(cons x y)] ? 
+Tail recursion: ([cons] [x] [y]) ? 
+ Eval: [cons] ? n
+ Return: #&lt;101A31F0&gt; ? 
+ Eval: [x] ? 
+ Tail recursion: #&lt;G.00000009&gt; ? 
+ Return: 0 ? 
+ Eval: [y] ? 
+ Tail recursion: #&lt;G.0000000A&gt; ? 
+ Return: 1 ? 
+Return: (0 . 1) ? 
+(0 . 1)
+</pre>
+
+<a name="Trace"><h2><code>(trace <var>function-name</var> ...)</code></h2></a>
+  <code><var>function-name</var></code>
+  を名前として持つ手続きの呼び出しと戻りにおいてそれぞれ引数、
+  値を表示させるようにする。
+  Scheme においては手続きはリターンしないことも多いので呼び出しフレームは
+  インデントではなくシリアル番号で示すようにしてある。
+<p>
+  実行例
+<pre>
+pi: (trace tak)
+#&lt;done&gt;
+pi: (tak 3 2 1)
+&lt;0&gt;Call: (tak 3 2 1)
+&lt;1&gt;Call: (tak 2 2 1)
+&lt;1&gt;Return: 1
+&lt;2&gt;Call: (tak 1 1 3)
+&lt;2&gt;Return: 3
+&lt;3&gt;Call: (tak 0 3 2)
+&lt;3&gt;Return: 2
+&lt;4&gt;Call: (tak 1 3 2)
+&lt;4&gt;Return: 2
+&lt;0&gt;Return: 2
+2
+</pre>
+
+<a name="Trap"><h2><code>(trap <var>function-name</var> ...)</code></h2></a>
+  <code>trace</code> では表示のみであるが、<code>trap</code>
+  では呼び出しのたびに利用者との対話を行う。
+  戻りでは表示も行われないが、
+  そのことによって末尾再帰によるくり返しでも正常に実行可能である。
+<dl>
+  <dt><code>Call: (<var>function</var> . <var>args</var>) ?</code>
+  <dd><code><var>function</var></code> が呼び出されようとしている。
+      以下のコマンドが使用できる。
+      <table>
+      <tr>
+	<td valign=top>(改行)</td>
+	<td>そのまま実行を続ける。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>s</code></td>
+	<td>ステップ実行に入る。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>r</code></td>
+	<td>式の入力を求められる。
+	    入力した式がトップレベルの環境で評価され戻り値のかわりに使用される。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>b</code></td>
+	<td><code>(break)</code> を実行する。</td>
+      </tr>
+      </table>
+</dl>
+  実行例
+<pre>
+pi: (trap tak)
+#&lt;done&gt;
+pi: (tak 3 2 1)
+Call: (tak 3 2 1) ? 
+Call: (tak 2 2 1) ? 
+Call: (tak 1 1 3) ? ?
+pass s}tep r}eturn b}erak
+Call: (tak 1 1 3) ? b
+break&gt; (continue)
+Call: (tak 1 1 3) ? s
+Eval: (if-parsed (not (&lt; #&lt;G.00000003&gt; #&lt;G.00000002&gt;)) #&lt;G.00000004&gt; (tak (tak (- #&lt;G.00000002&gt; 1) #&lt;G.00000003&gt; #&lt;G.00000004&gt;) (tak (- #&lt;G.00000003&gt; 1) #&lt;G.00000004&gt; #&lt;G.00000002&gt;) (tak (- #&lt;G.00000004&gt; 1) #&lt;G.00000002&gt; #&lt;G.00000003&gt;))) ? 
+ Eval: (not (&lt; #&lt;G.00000003&gt; #&lt;G.00000002&gt;)) ? n
+ Return: #t ? 
+Tail recursion: #&lt;G.00000004&gt; ? 
+Return: 3 ? 
+Call: (tak 0 3 2) ? 
+Call: (tak 1 3 2) ? r
+Value? -1
+-1
+</pre>
+
+<a name="Untrace"><h2><code>(untrace <var>function-name</var> ...)</code></h2></a>
+  <code>trace</code>, <code>trap</code> を解除する。
+
+<a name="Trerr"><h2><code>(trace-error <var>expression</var>)</code></h2></a>
+  rhizome/pi は通常エラーが起こった場合その場所について何も報告しない。
+  <code>trace-error</code>
+  のもとで実行することによりエラー時のバックトレースを対話的に
+  ブラウズすることができる。ただし実行速度はかなり遅くなる。
+<dl>
+  <dt><code><var>frame</var> ?</code>
+  <dd>以下のコマンドが使用できる。
+      <table>
+      <tr>
+	<td valign=top>(改行)</td>
+	<td>親フレームを表示する。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>e</code></td>
+	<td>式の入力を求められる。
+	    入力した式が <code><var>frame</var></code> と同じ環境で評価され、
+	    その値が表示される。
+      </tr>
+      <tr>
+	<td valign=top><code>b</code></td>
+	<td><code>(break)</code> を実行する。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>a</code></td>
+	<td>全フレームを表示する。</td>
+      </tr>
+      <tr>
+	<td valign=top><code>q</code></td>
+	<td>バックトレースの表示を終了する。</td>
+      </tr>
+      </table>
+</dl>
+  なお、バックトレースの情報は変数 <code>$err</code> にセーブされており、
+  <code>(backtrace $err)</code> で再表示させることができる。
+  (もちろん <code>$err</code> の内容を他の変数等に移すこともできる。)
+<p>
+  実行例
+<pre>
+pi: (define len1 (lambda (l) (if (null? l) 0 (+ (len1 (cdr l)) 1))))
+#&lt;done&gt;
+pi: (trace-error (len1 '(1 2 3 . 4)))
+
+Illegal argument supplied to function
+Backtrace:
+(cdr #&lt;G.00000015&gt;) ? ?
+parent e}val b}reak a}ll q}uit
+(cdr #&lt;G.00000015&gt;) ? 
+(len1 (cdr #&lt;G.00000015&gt;)) ? 
+=tail-recursion=&gt; (+ (len1 (cdr #&lt;G.00000015&gt;)) [1]) ? 
+(len1 (cdr #&lt;G.00000015&gt;)) ? 
+=tail-recursion=&gt; (+ (len1 (cdr #&lt;G.00000015&gt;)) [1]) ? 
+(len1 (cdr #&lt;G.00000015&gt;)) ? b
+break&gt; (continue)
+(len1 (cdr #&lt;G.00000015&gt;)) ? a
+=tail-recursion=&gt; (+ (len1 (cdr #&lt;G.00000015&gt;)) [1])
+(len1 (cdr #&lt;G.00000015&gt;))
+=tail-recursion=&gt; (+ (len1 (cdr #&lt;G.00000015&gt;)) [1])
+(len1 (quote-parsed 1 2 3 ..))
+#f
+pi: (trace-error (len1 '(1 2 3 4 5 6 7 8 . 9)))
+
+Illegal argument supplied to function
+Backtrace:
+(cdr #&lt;G.00000015&gt;) ? 
+(len1 (cdr #&lt;G.00000015&gt;)) ? 
+=tail-recursion=&gt; (+ (len1 (cdr #&lt;G.00000015&gt;)) [1]) ? q
+#f
+</pre>
+<hr>
+<h5><a href="index.html#Others">インデックス</h5>
+</body>
+</html>
