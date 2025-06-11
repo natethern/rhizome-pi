@@ -550,7 +550,7 @@ do_call(void)
 	int i;
 
 	for (i = cfa_argc; i-- > 0; )
-		asm("pushl %0": : "r"(cfa_argv[i]): "%esp");
+		asm("push %0": : "r"(cfa_argv[i]): );
 	asm("call *%1; movl %%eax, %0": "=r"(cfa_val): "r"(cfa_func): "%eax", "%ecx", "%edx", "cc", "memory");
 # endif
 # if defined(WIN32) && !defined(__CYGWIN32__) && !defined(__LCC__)

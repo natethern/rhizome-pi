@@ -1454,10 +1454,10 @@ sigmess(void)
 		RK_SIGNAL_ERROR1(RP_ERROR_ILLEGALARG);
 	n = RK_GETINUM(rk_eval_register[0]);
 #if !(defined(GO32) || defined(WIN32) || defined(__CYGWIN32__))
-	if (n < 0 || n >= NSIG)
+	//if (n < 0 || n >= NSIG)
 		sprintf(mes_buf, "Unknown signal %d", n);
-	else
-		sprintf(mes_buf, "%s", sys_siglist[n]);
+  //else
+	//	sprintf(mes_buf, "%s", sys_siglist[n]);
 #else
 	sprintf(mes_buf, "Signal %d", n);
 #endif

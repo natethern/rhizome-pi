@@ -1,0 +1,9 @@
+LINUX_FILES = ./config/unix/linux/rhiz_cnf.h ./config/unix/linux/Makefile.kappa ./config/unix/linux/Makefile.pi ./config/unix/linux/Makefile.pi.compiler ./config/unix/linux/config.scm
+
+all: $(LINUX_FILES)
+	cp ./config/unix/linux/rhiz_cnf.h ./include/
+	sed 's#-mtune=i686##g' ./config/unix/linux/Makefile.kappa > kappa/Makefile
+	sed 's#-mtune=i686##g' ./config/unix/linux/Makefile.pi > pi/Makefile
+	sed 's#-mtune=i686##g' ./config/unix/linux/Makefile.pi.compiler > pi/compiler/Makefile
+	sed 's#-mtune=i686##g' ./config/unix/linux/config.scm > pi/compiler/config.scm
+	cd ./pi; $(MAKE)

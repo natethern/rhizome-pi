@@ -1,0 +1,14 @@
+*.[oa]
+*.[ls]o
+*~
+pi/compiler/*.c
+include/rhiz_cnf.h
+kappa/Makefile
+pi/Makefile
+pi/compiler/Makefile
+pi/compiler/config.scm
+pi/compiler/pi
+pi/compiler/pisc
+pi/compiler/pisf
+pi/compiler/pisl
+pi/pi_boot
