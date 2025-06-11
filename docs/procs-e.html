@@ -1,0 +1,587 @@
+<html>
+<!-- $Id: procs-e.html,v 1.6 1999/02/15 08:59:00 qfwfq Exp $ -->
+
+<head>
+<title>rhizome/pi procedures</title>
+</head>
+
+<body>
+<ul>
+  <li><a href="#Filename">Interpretation of file name</a>
+  <li><a href="#General">General</a>
+  <li><a href="#Macro">Macros</a>
+  <li><a href="#System">System environment</a>
+  <li><a href="#Error">Errors</a>
+  <li><a href="#Signal">Signals</a>
+  <li><a href="#Port">Ports</a>
+  <li><a href="#Debugger">Debugger support</a>
+  <li><a href="#Bitwise">Bitwise operations and floating point numbers</a>
+  <li><a href="#Channel">Channel</a>
+  <li><a href="#Object">Object</a>
+  <li><a href="extfunc-e.txt">Interface to external functions</a>
+  <li><a href="wwlib-e.txt">Win32 API wrapper library</a>
+</ul>
+
+<a name="Filename"><h2>Interpretation of file name</h2></a>
+  On procedures which takes file name as argument and carries out inout/output
+  on it, the following interpretation is done to the string given as file name.
+<table>
+  <tr>
+    <td valign=top><code>"pathname"</code></td>
+    <td>First element is character other than <code>#\&lt; #\&gt; #\|</code><br>
+	Treat entire string as a path name of file.
+	If a file with the given name already exists on output
+	procedure, the result is unspecified.</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"&lt;pathname"</code></td>
+    <td>First element is <code>#\&lt;</code><br>
+	Valid on input procedure. Treat susbstring starting
+	from the second character as a path name of file.</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"&gt;pathname"</code></td>
+    <td>First element is <code>#\&gt;</code> and second is not <code>#\&gt;</code><br>
+	Valid on output procedure. Treat substring starting
+	from the second character as a path name of file.
+	If a file with the given name already exists,
+	overwrite it.</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"&gt;&gt;pathname"</code></td>
+    <td>First element is <code>#\&gt;</code> and second is <code>#\&gt;</code><br>
+	Valid on output procedure. Treat substring starting
+	from the third character as a path name of file.
+	If a file with the given name already exists,
+	append to it.</td>
+  </tr>
+  <tr>
+    <td valign=top><code>"|command"</code></td>
+    <td>Frist element is <code>#\|</code><br>
+	Treat substring starting from the second character as
+	a command string. On input procedure, resulting port
+	inputs from its standard output. On output procedure,
+	resulting port outputs to its standard input. Exit
+	status can be retrieved by <code>rp:file-status</code> (see below.)</td>
+  </tr>
+</table>
+<p>
+  Because whether the string is for input or for output is determined by the
+  procedure it is supplied for, pipe symbol is always put on the head. Notice
+  that the syntax is different from that in perl in this point.
+
+<a name="General"><h2>General</h2></a>
+<dl>
+  <dt><code>(gensym)</code> procedure
+  <dd>Generates (uninterned) symbol.
+  <dt><code>(rp:symbol-value <var>symbol</var> [<var>default-value</var>])</code> procedure
+  <dd>Value of <code><var>symbol</var></code> (in the toplevel environment.)
+      If  <code><var>symbol</var></code> is unbound,
+      <code><var>default-value</var></code> is returned. If one is not
+      supplied, return value in that case is unspecified.
+      This is intended to be used to implement features such as property list
+      seen in other lisp dialects.  Mixing the usage of symbol as a variable
+      on program and the usage of <code>rp:symbol-value</code> is discouraged.
+  <dt><code>(rp:symbol-value-set! <var>symbol</var> <var>value</var>)</code> procedure
+  <dd>Set <code><var>value</var></code> of <code><var>symbol</var></code>
+      (in the toplevel environment.) See note on <code>rp:symbol-value</code>.
+  <dt><code>(rp:symbol-bound? <var>symbol</var>)</code> procedure
+  <dd>Returns <code>#t</code> if <code><var>symbol</var></code> is bound in the
+      toplevel environment, otherwise returns <code>#f</code>.
+  <dt><code>(rp:symbol-aux-datum-set! <var>symbol</var> <var>obj</var>)</code> procedure
+  <dd>Associate arbitrary value <code><var>obj</var></code> to
+      <code><var>symbol</var></code>. This value can be retrieved by
+      <code>rp:symbol-aux-datum</code> aftarwards.
+  <dt><code>(rp:symbol-aux-datum <var>symbol</var> [<var>default-value</var>])</code> procedure
+  <dd>Retrieve the value assoceiated to <code><var>symbol</var></code> by
+      <code>rp:symbol-aux-datum-set!</code>. If no value is associated,
+      <code><var>default-value</code></var> is returned if one is specified.
+  <dt><code>(rp:symbol-aux-datum-assigned? <var>symbol</var>)</code> procedure
+  <dd>Returns <code>#t</code> if <code>rp:symbol-aux-datum-set!</code>
+      was applied to <code><var>symbol</var></code>, otherwise returns
+      <code>#f</code>.
+  <dt><code>(break [<var>prompt</var>])</code> procedure
+  <dd>Execute read-eval-print loop. <code><var>Prompt</var></code> is given
+      as string. If it is not supplied, defaults to "break> ".
+  <dt><code>(continue)</code> procedure
+  <dd>Exit from innermost break loop. In normal toplevel, this means the end
+      of pi.  The variable <code>continue</code> is unbound if break loop is
+      not executing.
+  <dt><code>(rp:object->string <var>object</var>)</code> procedure
+  <dd>Return external representation of <code><var>object</var></code>
+      as string.
+  <dt><code>(rp:string->object <var>string</var>)</code> procedure
+  <dd>Return a object with external representation
+      <code><var>string</var></code>.
+  <dt><code>(rp:locally ((<var>var</var> <var>val</var>) ...) (<var>cleanup</var> ...) <var>body</var> ...)</code> syntax
+  <dd>Values of <code><var>val</var></code> are bound to
+      <code><var>var</var></code> as in let,
+      expressions in <code><var>body</var></code> are evaluated.
+      When last expression of <code><var>body</var></code> returns or
+      exit by error in evaluationg <code><var>body</var></code>,
+      expressions in <code><var>cleanup</var></code> are evaluated
+      in the scope of binding. If all expressions in
+      <code><var>body</var></code> returned,
+      last value become the value of expression.
+  <dt><code>(rp:char-dbcs-lead-byte? <var>char</var>)</code> procedure
+  <dd>Returns true if <code><var>char</var></code> is first byte of double
+      byte charecter. Criterion depends on operating system and user
+      environment settings. Of cource, this procedure makes sence only for
+      encoding systems in which all multibyte characters consists of exactly
+      two bytes.
+  <dt><code>(rp:dbg-set-flag <var>symbol</var> <var>value</var>)</code> procedure
+  <dd>Associates <code><var>values</var></code> to
+      <code><var>symbol</var></code>.
+      Value can be retrieved by <code>rp:dbg-debugging?</code> procedure.
+      This is intended to be used for managing global flags which
+      affect expansion of some macros or execution of programs.
+  <dt><code>(rp:dbg-debugging? <var>symbol</var>)</code> procedure
+  <dd>Retrieves values associated to <code><var>symbol</var></code> by
+      <code>rp:dbg-set-flag</code> procedure.
+      If no values is associated, returns <code>#f</code> by default.
+</dl>
+
+<a name="Macro"><h2>Macros</h2></a>
+<dl>
+  <dt><code>(rp:eval-in-compiler-environment <var>expression</var>)</code> syntax
+  <dd>On interpreter, expression is simply evaluated. Put in toplevel,
+      expression will be evaluated at compile time, leaving its side
+      effects to compilation process.
+  <dt><code>(rp:load-into-compiler-environment <var>file</var>)</code> syntax
+  <dd>Have same effect with <code>(load <var>file</var>)</code> on
+      interpreter. Put in toplevel, file will be loaded to the environment
+      of compiler when compiled. So the content of the file will affect the
+      compilation process insted of included in the output code.
+  <dt><code>(rp:use-macro-package <var>file</var>)</code> syntax
+  <dd>Search <code><var>file</var></code> from several directories and load it
+      as in <code>rp:load-into-compiler-environment</code>. Search order is
+      <ol><li>current directory
+	  <li>(in pisc) directories specified by <code>-mpath</code> option
+	  <li>directories listed in the environment variable
+	      <code>RHIZOME_MACRO_PATH</code>
+	  <li>directory specified by the environment variable
+	      <code>RHIZOME_LIB</code>
+      </ol>
+      Moreover, search path is stored in the variable
+      <code>rp:*macro-search-list*</code>, so search order is controlled by
+      assigning arbitrary value to this.
+</dl>
+
+<a name="System"><h2>System environment</h2></a>
+<dl>
+  <dt><code>(exit [<var>exit-code</var>])</code> procedure
+  <dd>Exit pi with <code><var>exit-code</var></code> as status. Default of
+      <code><var>exit-code</var></code> is 0.
+  <dt><code>(system <var>string</var>)</code> procedure
+  <dd>Execute <code>system()</code> in the standard library and returns its
+      vaule.
+  <dt><code>(getenv <var>string</var>)</code> procedure
+  <dd>Vaule of environment variable <code><var>string</var></code>.
+  <dt><code>(file-exists? <var>string</var>)</code> procedure
+  <dd>Returns #t if a file with name <code><var>string</var></code> exists,
+      #f otherwise.
+  <dt><code>*invocation-arg*</code> global variable
+  <dd>List consists with program name and its arguments.
+  <dt><code>(rp:command-line-arguments)</code> procedure
+  <dd>Vector of command line arguments.
+  <dt><code>(rp:time)</code> procedure
+  <dd>Information of execution time of process in the form
+      <code>#(<var>real</var> <var>user</var> <var>sys</var>)</code>.
+  <dt><code>(rp:errno)</code> procedure
+  <dd>Value of <code>errno</code> in the standard library.
+  <dt><code>(rp:strerror <var>errono</var>)</code> procedure
+  <dd>String retrieved by calling <code>strerror(<var>errno</var>)</code> in
+      standard library.
+  <dt><code>(rp:load-compiled-module <var>module</var>)</code> procedure
+  <dd>Loads <code><var>module</var></code> which is created by -loadable
+      option of pisl.
+  <dt><code>(rp:identify-platform)</code> procedure
+  <dd>Returns list which identifies platform. The list is consists of at least
+      3 elements. First elements identifies sort of operating system. Second
+      element identifies platform architecture. Third element is a string
+      representing version of operating system.
+</dl>
+
+<a name="Error"><h2>Errors</h2></a>
+<dl>
+  <dt><code>(rp:catch-error <var>procedure</var> <var>expression</var>)</code> syntax
+  <dd>Catch errors.<br>
+      First, evaluate <code><var>procedure</var></code>. The result must be a
+      procedure with two arguments. Next, evaluate
+      <code><var>expression</var></code> and return its vaule. If error is
+      caused in evaluating <code><var>expression</var></code>,
+      <code><var>procedure</var></code> is called in the form
+<pre>
+	(<var>procedure</var> <var>error-code</var> <var>obj</var>)
+</pre>
+      and the vaule will be the value of entire form.
+      The error processing environment consists a part of continuation.
+  <dt><code>(rp:call-with-error-handler <var>error-proc</var> <var>thunk</var>)</code> procedure
+  <dd><code>(rp:catch-error <var>procedure</var> <var>expression</var>)</code>
+      is implemented as a macro expanded to the following.
+<pre>
+	(rp:call-with-error-handler <var>error-proc</var> (lambda () <var>expression</var>))
+</pre>
+  <dt><code>(rp:error-message <var>error-code</var> <var>obj</var>)</code> procedure
+  <dd>Returns error message as a string.
+  <dt><code>(rp:print-error-message <var>error-code</var> <var>obj</var> [<var>port</var>])</code> procedure
+  <dd>Outputs error message to <code><var>port</var></code>
+      (default is <code>current-output-port</code>.)
+  <dt><code>(rp:exception (<var>type</var> <var>arg</var> ...) <var>message-proc</var>)</code> syntax
+  <dd>Returns procedure which takes arguments corresponding to
+      <code>(<var>arg</var> ...)</code>.
+      If this procedure gets called, exception of type
+      <code>(<var>type</var> <var>arg</var> ...)</code> is generated.
+      <code><var>Type</var></code> must be a symbol,
+      <code><var>message-proc</var></code> must be evaluated
+      (in the environment where <code>(<var>arg</var> ...)</code>
+      is bound to arguments) yielding an one argument procedure.
+      When error message of the exception is needed,
+      result of <code><var>message-proc</var></code> is called with an output
+      port as argument and it must generate appropriate message on that port.
+  <dt><code>(rp:displatch-exception <var>error-code</var> <var>obj</var> ((<var>error-type</var> <var>arg</var> ...) <var>action</var> ...) ...)</code> syntax
+  <dd><code><var>Error-code</var></code> and <code><var>obj</var></code>
+      are arguments of error
+      handling procedure obtained via <code>rp:call-with-error-handler</code>.
+      Clause with matching type is selected and its action is executed in the
+      environment where <code>(<var>arg</var> ...)</code> is bound to data of
+      exception. Result of last expression of <code><var>action</var></code>
+      will returned.<br>
+      Special exception type
+      <code>(default <var>error-code</var> <var>obj</var>)</code>
+      matches any type of error.<br>
+      If there is no matching clause, error of same type is generated.<br>
+      Following error types are pre-defined,
+      though much of them are not so useful.
+<table>
+  <tr>
+    <td><code>(rp:os-error <var>errno</var>)</code></td>
+    <td>function call results in error</td>
+  </tr>
+  <tr>
+    <td><code>(rp:read-syntax-error <var>message</var>)</code></td>
+    <td>syntax error in <code>(read)</code></td>
+  </tr>
+  <tr>
+    <td><code>(rp:eof-error)</code></td>
+    <td>unexpected end of file</td>
+  </tr>
+  <tr>
+    <td><code>(rp:storage-error)</code></td>
+    <td>out of storage</td>
+  </tr>
+  <tr>
+    <td><code>(rp:overflow-error)</code></td>
+    <td>overflow of numerical calculation</td>
+  </tr>
+  <tr>
+    <td><code>(rp:div0-error)</code></td>
+    <td>divide by zero</td>
+  </tr>
+  <tr>
+    <td><code>(rp:ldso-error <var>message</var>)</code></td>
+    <td>error related to external function</td>
+  </tr>
+  <tr>
+    <td><code>(rp:eval-error <var>obj</var>)</code></td>
+    <td>illegal object is evaluated</td>
+  </tr>
+  <tr>
+    <td><code>(rp:var-unbound-error <var>var</var>)</code></td>
+    <td>variable is unbound</td>
+  </tr>
+  <tr>
+    <td><code>(rp:apply-error <var>obj</var>)</code></td>
+    <td>application of non-procedure</td>
+  </tr>
+  <tr>
+    <td><code>(rp:arg-error)</code></td>
+    <td>argument type missmatch</td>
+  </tr>
+  <tr>
+    <td><code>(rp:primitive-error <var>exp</var>)</code></td>
+    <td>wrong primitive syntax</td>
+  </tr>
+  <tr>
+    <td><code>(rp:excess-formal-error)</code></td>
+    <td>too many formal parameters</td>
+  </tr>
+  <tr>
+    <td><code>(rp:arg-count-error)</code></td>
+    <td>argument count missmatch</td>
+  </tr>
+  <tr>
+    <td><code>(rp:define-error)</code></td>
+    <td>define statement at illegal position</td>
+  </tr>
+  <tr>
+    <td><code>(rp:exception-error <var>data</var>)</code></td>
+    <td>exception generated via <code>rp:exception</code></td>
+  </tr>
+  <tr>
+    <td><code>(rp:map-error)</code></td>
+    <td>arguments of <code>map</code> are not in same length</td>
+  </tr>
+  <tr>
+    <td><code>(rp:eval-procedure-error)</code></td>
+    <td>illegal behavior of evaluator procedure</td>
+  </tr>
+  <tr>
+    <td><code>(rp:busy-port-error)</code></td>
+    <td>procedure port is used while busy</td>
+  </tr>
+  <tr>
+    <td><code>(rp:port-procedure-error)</code></td>
+    <td>illegal behavior of port procedure</td>
+  </tr>
+  <tr>
+    <td><code>(rp:read-only-var-error <var>var</var>)</code></td>
+    <td>value of variable is immutable</td>
+  </tr>
+</table>
+      Note that type <code>rp:exception-error</code> matches all exception
+      generated via <code>rp:exception</code>.
+  <dt><code>(rp:try-except <var>expression</var> ((<var>error-type</var> <var>arg</var> ...) <var>action</var> ...) ...)</code> syntax
+  <dd><code><var>Expression</var></code> is evaluated and its value will be
+      returned. If error is cuased while evaluation, it will be handled as in
+      <code>rp:dispatch-exception</code>.
+  <dt><code>(rp:raise-os-error <var>errno</var>)</code> procedure
+  <dd>Generate error of type <code>(rp:os-error <var>errno</var>)</code>.
+</dl>
+
+<a name="Signal"><h2>Signals</h2></a>
+<dl>
+  <dt><code>(rp:set-signal-handler <var>signal</var> <var>procedure</var>)</code> procedure
+  <dd><code><var>Signal</var></code> is a signal numberd by system,
+      <code><var>procedure</var></code> is a procedure with one argument or
+      <code>#t</code> or <code>#f</code>. If <code><var>signal</var></code>
+      is raised, <code><var>procedure</var></code> is called as
+<pre>
+	(<var>procedure</var> <var>signal</var>)
+</pre>
+      No particular restriction is imposed on the behavior of this
+      <code><var>procedure</var></code>. If <code><var>procedure</var></code>
+      is <code>#t</code>, the default action is restored. If
+      <code><var>procedure</var></code> is <code>#f</code>,
+      signal will be ignored. Vaule is the previous signal handler.
+  <dt><code>(rp:signal-message <var>signal</var>)</code> procedure
+  <dd>Returns signal message as a string.
+  <dt><code>(rp:print-signal-message <var>signal</var> [<var>port</var>])</code> procedure
+  <dd>Output signal message to <code><var>port</var></code>
+      (default is <code>current-output-port</code>.)
+  <dt><code>(rp:raise-signal <var>signal</var>)</code> procedure
+  <dd>Call signal handler procedure as if that signal was caught.
+</dl>
+
+<a name="Port"><h2>7. Ports</h2></a>
+<dl>
+  <dt><code>(rp:current-error-port)</code> procedure
+  <dd>Returns the output port which corresponds to <code>stderr</code>.
+  <dt><code>(rp:set-current-input-port [<var>port</var>])</code> procedure
+  <dt><code>(rp:set-current-output-port [<var>port</var>])</code> procedure
+  <dd>Changes <code>current-input-port</code>, <code>current-output-port</code>
+      respectively. If the argument is omitted, the original one at
+      invocation is restored.
+  <dt><code>(open-input-string <var>string</var>)</code> procedure
+  <dd>Returns input port which takes input from <code><var>string</var></code>.
+  <dt><code>(open-output-string)</code> procedure
+  <dd>Returns output port which writes to string.
+  <dt><code>(get-output-string <var>port</var>)</code> procedure
+  <dd><code><var>Port</var></code> must be a output port made by
+      <code>rp:open-output-string</code>. Retrieves string consisting of
+      characters outputted to the <code><var>port</var></code> so far.
+  <dt><code>(rp:open-input-procedure <var>procs</var>)</code> procedure
+  <dd>Returns input port. <code><var>Procs</var></code> is a vector with four
+      elements, say
+<pre>
+	#(<var>getchar</var> <var>ungetchar</var> <var>getlinecount</var> <var>char-readyp</var>)
+</pre>
+      Each element is a procedure. Doing a input from resulting port causes
+      invocation of <code><var>getchar</var></code>.
+<pre>
+  	(<var>getchar</var>) => (<var>char</var> . <var>procs'</var>)
+</pre>
+      <code><var>procs'</var></code> is a vector simillar to
+      <code><var>procs</var></code> (simillar in the following,) say
+<pre>
+  	#(<var>getchar'<var> </var>ungetchar'<var> </var>getlinecount'<var> </var>char-readyp'</var>)
+</pre>
+      If <code><var>char</var></code> is a character, it will be a charecter
+      read from the port. If <code><var>char</var></code> is a list of form
+      <code>(<var>error-code</var> <var>obj</var>)</code> where elements are
+      ones given as arguments of error handling procedure, input lasts with a
+      error of same type.
+      If <code><var>char</var></code> is <code>#f</code>, port is effectively
+      in a end-of-file status. In the next usage of port,
+      <code><var>procs'</var></code> will be used.<br>
+      <code><var>Ungetchar</var></code> gets called as
+<pre>
+  	(<var>ungetchar</var> <var>char</var>) => <var>procs'</var>
+</pre>
+      Here, <code>(<var>getchar'</var>) => (<var>char</var> . <var>procs''</var>), <var>procs</var> == <var>procs''</var></code>
+      is expected.<br>
+      <code><var>Getlinecount</var></code> gets called as
+<pre>
+	(<var>getlinecount</var>) => (<var>linecount</var> . <var>procs'</var>)
+</pre>
+      <code><var>linecount</var></code> is a integer, treated as a line
+      number when getlinecount is called. In particular, if it was 0, it means
+      the line number is not applicable.</br>
+      <code><var>Char-readyp</var></code> gets called as
+<pre>
+  	(<var>char-readyp</var>) => (<var>ready?</var> . <var>procs'</var>)
+</pre>
+      If <code><var>ready?</var></code> is a Boolean value, it will be a
+      vaule of <code>char-ready?</code> of that port.
+      If it is a list of form <code>(<var>error-code</var> <var>obj</var>)</code>,
+      error of that type is caused.
+<p>
+  Note: In the duration of execution of these procedures, the port will be
+  unusable. So, in particular, errors should not be generated. Errorneous
+  conditions should be reported to the mechanism which calls the procedure
+  via the interface above. The effect is unpreditable if an instance of
+  invocation of these procedures returns multiple times.
+<p>
+  <dt><code>(rp:open-output-procedure <var>proc</var>)</code> procedure
+  <dd>Returns output port. <code><var>Proc</var></code> is a procedure.
+      Doing a output to resulting port causes invocation of
+      <code><var>proc</var></code> in the form
+<pre>
+	(<var>proc</var> <var>char</var>) => (<var>result</var> . <var>proc'</var>)
+</pre>
+      <code><var>Char</var></code> is a character to be outputted.
+      If result is <code>#t</code>, the output is assumed to be done normally.
+      If result is a list of form <code>(<var>error-code</var> <var>obj</var>)</code>,
+      error of that type will be generated.
+      In the next usage of port, <code><var>proc'</var></code> will be used.
+      The same note is applied as <code>rp:open-output-procedure</code>.
+  <dt><code>(rp:file-status <var>port</var>)</code> procedure
+  <dd><code><var>Port</var></code> must be a port result from
+      <code>open-output-file</code> or <code>open-input-file</code>.
+      The following vaules are returned accroding to the status of
+      <code><var>port</var></code> at closing time.
+      <table>
+      <tr>
+	<td><code>#f</code></td>
+	<td><code><var>Port</var></code> is not closed yet.</td>
+      </tr>
+      <tr>
+	<td>Generates a error</td>
+	<td>Underlying close operation (flose or pclose) returned -1.</td>
+      </tr>
+      <tr>
+	<td>Integer vaule</td>
+	<td>Return vaule other than -1 of underlying
+	    close operation (fclose of pclose.)</td>
+      </tr>
+      </table>
+</dl>
+
+<a name="Debugger"><h2>Debugger support</h2></a>
+<dl>
+  <dt><code>(rp:apply-with-evaluator-hook <var>hook-function</var> <var>procedure</var> <var>arguments</var>)</code>
+  <dt><code>(rp:hook-evaluator <var>hook-function</var> <var>expression</var> <var>environment</var> <var>continuation</var>)</code>
+  <dt><code>(rp:call-evaluator <var>expression</var> <var>environment</var>)</code>
+  <dt><code>(rp:top-level-environment)</code>
+  <dt><code>(rp:expression->data <var>expression</var> <var>environment</var>)</code>
+  <dt><code>(rp:hook-applicator <var>hook-function</var> <var>procedure</var>)</code>
+  <dt><code>(rp:unhook-applicator <var>procedure</var>)</code>
+  <dd>Dateiled descriptions of these procedures will not be given here.
+      If you are interested, cunsult to the implementation of step, trace
+      and such in debugger.pi.
+      The auther may write individual document in the future.
+</dl>
+
+<a name="Bitwise"><h2>Bitwise operations and floating point numbers</h2></a>
+<dl>
+  <dt><code>(rp:bitwise-and <var>n1</var> <var>...</var>)</code> procedure
+  <dt><code>(rp:bitwise-or <var>n1</var> <var>...</var>)</code> procedure
+  <dt><code>(rp:bitwise-xor <var>n1</var> <var>...</var>)</code> procedure
+  <dt><code>(rp:bitwise-invert <var>n</var>)</code> procedure
+  <dd>Each argument must be an exact integer. Regarding them as infinite
+      length bit sequence in which almost all bits are 0 (when the number
+      is nonnegative) or almost all bits are 1 (when the number is negative
+      and represented in complement of 2), returns the result of applying
+      logical operantion to each bit.
+  <dt><code>(rp:infinite? <var>z</var>)</code> procedure
+  <dt><code>(rp:not-a-number? <var>z</var>)</code> procedure
+  <dd>Return true if number z is not finite / not-a-number respectively.
+</dl>
+
+<a name="Channel"><h2>Channel</h2></a>
+<dl>
+  <dt><code>(rp:create-channel <var>proc</var>)</code> procedure
+  <dd><code><var>Proc</var></code> is a procedure with one argument.
+      This gets called with an argument (say <code><var>rcv</var></code> here),
+      which is a procedure with no arguments. This call shall never return.
+      Call to <code>rp:create-channel</code> itself returns a procedure
+      (say <code><var>snd</var></code> here).
+      Calling <code><var>snd</var></code> results in a call to
+      <code><var>rcv</var></code> returning its argument as value.
+  <dt><code>(rp:with-channel-as-input-port <var>proc</var>)</code> procedure
+  <dd><code><var>Proc</var></code> is a procedure with one argument.
+      This gets called with an argument
+      (say <code><var>port</var></code> here), which is an input port.
+      This call shall never return.
+      Call to <code>rp:with-channel-as-input-port</code> itself
+      returns a procedure (say <code><var>snd</var></code> here).
+      Calling <code><var>snd</var></code> results in
+      <code><var>port</var></code> acts as follows.
+	<table>
+	<tr><td><code>(snd <var>c</var>)</code> : <code><var>c</var></code> is a charecter</td>
+	    <td>Input <code><var>c</var></code> is generated.</td></tr>
+	<tr><td><code>(snd (<var>error-code</var> <var>obj</var>))</code></td>
+	    <td>Error is generated.</td></tr>
+	<tr><td><code>(snd 'eof)</code></td>
+	    <td>Become <code>end-of-file</code>.</td></tr>
+	<tr><td><code>(snd 'newline)</code></td>
+	    <td>Advance line counter.</td></tr>
+	<tr><td><code>(snd #t)</code></td>
+	    <td><code>Char-ready?</code> become true.</td></tr>
+	<tr><td><code>(snd #f)</code></td>
+	    <td><code>Char-ready?</code> become false.</td></tr>
+	</table>
+  <dt><code>(rp:with-output-port-as-channel <var>proc</var>)</code> procedure
+  <dd><code><var>Proc</var></code> is a procedure with one argument.
+      This gets called with an argument (say <code><var>rcv</var></code> here).
+      This call shall never return.
+      Call to <code>rp:with-output-port-as-channel</code> itself
+      returns an output port (say <code><var>port</var></code> here).
+      Charecters output through <code><var>port</var></code> are retrieved by
+      calling <code><var>rcv</var></code>.
+</dl>
+
+<a name="Object"><h2>Object</h2></a>
+For basic concepts, refer to
+<a href="ftp://ftp.cs.indiana.edu/pub/scheme-repository/doc/pubs/swob.txt">
+"Scheming with Objects" (Ken Dickey, Computer Language, October 1992)</a>.
+This can be accessed from
+<a href="http://www.cs.indiana.edu/scheme-repository/">
+"The Internet Scheme Repository"</a>.
+<dl>
+  <dt><code>(rp:define-generic (<var>name</var> <var>this</var> . <var>args</var>) <var>exp</var> ...)</code> syntax
+  <dd>Define <code><var>name</var></code> as a method. If at lease one
+      expression exists in place of <code><var>exp</var></code>,
+      default action is to call
+      <code>(lambda (<var>this</var> . <var>args</var>) <var>exp</var> ...)</code>.
+      When no <code><var>exp</var></code> exists,
+      default action raises error of type
+      <code>(rp:no-method <var>name</var> <var>obj</var>)</code>,
+      where <code><var>name</var></code> is the name of method and
+      <code><var>obj</var></code> is the object to which method is applied.
+  <dt><code>(rp:object-constructor ((<var>ancestor</var> <var>init</var>) ...) ((<var>operation</var> <var>this</var> . <var>arg</var>) <var>exp</var> ...) ...)</code> syntax
+  <dd>Generate instance object. <code><var>Ancestor</var></code> names base
+      object and bound to the value results from evaluating corresponding
+      <code><var>init</var></code>. <code><var>Operation</var></code> is
+      method defined by <code>rp:define-generic</code>.
+      When the method is called, corresponding procedure
+      <code>(lambda (<var>this</var> . <var>arg</var>) <var>exp</var> ...)</code> is applied.
+  <dt><code>(rp:proxy <var>ancestor</var> <var>operation</var>)</code> procedure
+  <dd>Returns procedure to call in order to delegate processing of
+      <code><var>operation</var></code> to the base object
+      <code><var>ancestor</var></code>.
+</dl>
+<hr>
+<h5><a href="index-e.html#Others">indexes</h5>
+</body>
+</html>

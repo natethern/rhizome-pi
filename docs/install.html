@@ -1,0 +1,429 @@
+<html>
+<!-- $Id: install.html,v 1.12 2005/11/10 08:47:34 qfwfq Exp $ -->
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-2022-JP">
+<title>rhizome/pi-Installation instructions</title>
+</head>
+
+<body>
+<blockquote>
+GO32環境はサポートしていません。'#ifdef GO32' とかがソース中に
+散見されるのは過去の遺跡とでも思ってください :-)
+</blockquote>
+
+<ul>
+  <li><a href="#Proc">共通のインストール手順</a>
+  <li><a href="#Files">各ファイルの内容</a>
+  <ul>
+    <li><a href="#Cnf_h">include/rhiz_cnf.h</a>
+    <li><a href="#Makefile">kappa/Makefile, pi/Makefile</a>
+    <li><a href="#CMakefile">pi/compiler/Makefile</a>
+    <li><a href="#Config_scm">pi/compiler/config.scm</a>
+  </ul>
+  <li><a href="#Runtime">使用時の環境設定</a>
+</ul>
+
+<a name="Proc"><h2>共通のインストール手順</h2></a>
+  環境毎に変更する必要のあるファイルはディレクトリ config 内に置いてある。
+  適当なサブディレクトリを選び、その中の各ファイルを然るべき場所にコピーし、
+  必要なら内容を変更する。
+
+  <table>
+  <tr>
+    <td>config/unix/</td>
+    <td>unix(ライクなOS)用の設定</td>
+  </tr>
+  <tr>
+    <td align="center">config/unix/full</td>
+    <td>*BSD用の通常の設定</td>
+  </tr>
+  <tr>
+    <td align="center">config/unix/linux</td>
+    <td>linux用の設定</td>
+  </tr>
+  <tr>
+    <td align="center">config/unix/static</td>
+    <td>共有ライブラリを使用しない設定</td>
+  </tr>
+  <tr>
+    <td align="center">config/unix/piconly</td>
+    <td>コンパイラオプション -fpic が不必要な場合</td>
+  </tr>
+  <tr>
+    <td>config/win32/</td>
+    <td>Win32用の設定</td>
+  </tr>
+  <tr>
+    <td align="center">config/win32/cygwin</td>
+    <td>Cygwin 用</td>
+  </tr>
+  <tr>
+    <td align="center">config/win32/msc</td>
+    <td>Microsoft のコンパイラ用</td>
+  </tr>
+  <tr>
+    <td align="center">config/win32/bc</td>
+    <td>Borland のコンパイラ用</td>
+  </tr>
+  <tr>
+    <td align="center">config/win32/lcc</td>
+    <td>lcc-win32 用</td>
+  </tr>
+  <tr>
+    <td>config/beos/</td>
+    <td>BeOS用の設定(最新版では未テスト)</td>
+  </tr>
+  <tr>
+    <td align="center">config/beos/intel</td>
+    <td>Intel版</td>
+  </tr>
+  </table>
+
+  各ディレクトリ内には以下のファイルがある。
+
+  <table>
+  <tr>
+    <th>ファイル名</th>
+    <th>コピー先</th>
+  </tr>
+  <tr>
+    <td>rhiz_cnf.h</td>
+    <td>include/rhiz_cnf.h</td>
+  </tr>
+  <tr>
+    <td>Makefile.kappa</td>
+    <td>kappa/Makefile</td>
+  </tr>
+  <tr>
+    <td>Makefile.pi</td>
+    <td>pi/Makefile</td>
+  </tr>
+  <tr>
+    <td>Makefile.pi.compiler</td>
+    <td>pi/compiler/Makefile</td>
+  </tr>
+  <tr>
+    <td>config.scm</td>
+    <td>pi/compiler/config.scm</td>
+  </tr>
+  </table>
+
+  これらのファイルを用意した後ディレクトリ pi でmake(に相当するツール)
+  を実行する。make install によってファイルを実行環境にインストールする。
+  インストール先は pi/Makefile の先頭で指定する。
+  インストール先のディレクトリはあらかじめ作成しておく必要がある。
+
+<a name="Files"><h2>各ファイルの内容</h2></a>
+<a name="Cnf_h"><h3>rhiz_cnf.h -&gt; include/rhiz_cnf.h</h3></a>
+<dl>
+  <dt>RK_HEAP_CHUNK_SIZE
+  <dt>RK_BULK_ALLOC_THRESHOLD
+  <dt>RK_EVAL_REGISTER_SIZE
+  <dd>変更の必要はない。
+<p>
+  <dt>RK_OLD_SYSV_SIGNAL
+  <dd>signal() の仕様によって定義する。ctrl-C２回でプログラムが終了
+      してしまう場合はこれを定義すればよい。逆に入力待ちが
+      ctrl-Cで割り込めない場合はこれを未定義にすればよい。
+<p>
+  <dt>RK_BSD_SETJMP
+  <dd>BSDスタイルの _setjmp, _longjmp 関数が存在するとき定義する。
+<p>
+  <dt>RK_NO_IEEE754_SUPPORT
+  <dd>関数 scalbn(), ilogb(), finite() が存在しない場合に定義する。
+      これが定義されていると上記関数は使用しなくなるが、そのかわり
+      exact->inexact が遅くなると思われる。ちなみに
+      <table>
+	<tr>
+	  <td><code>double scalbn(double x, int n)</code></td>
+	  <td>x*(2^n) を返す</td>
+	</tr>
+	<tr>
+	  <td><code>int ilogb(double x)</code></td>
+	  <td>2^n &lt;= x &lt; 2^(n+1) となるnを返す</td>
+	</tr>
+	<tr>
+	  <td><code>int finite(double x)</code></td>
+	  <td>x が有限の数なら1,+-Inf か NaN なら0</td>
+	</tr>
+      </table>
+<p>
+  <dt>RK_HAS_FINITE
+  <dd>上記 RK_NO_IEEE754_SUPPORT が必要だが finite() だけは存在する場合
+      これを定義する。
+<p>
+  <dt>RK_PERSISTENT_ALLOC_SIZE
+  <dt>RK_PERSISTENT_ALLOC_BASE
+  <dd>(WIN32でのみ参照)変更の必要はない。
+<p>
+  <dt>RK_MALLOC_NO_PAGE_ALIGN
+  <dd>ページサイズ以上のmalloc()がページアラインされていないアドレスを
+      返す可能性がある場合に定義する。いきなりエラーになる
+      (コアダンプとかワトソン博士とか)場合はこれを定義する必要がある。
+<p>
+  <dt>RK_USE_LOCALE
+  <dd>WIN32以外で mblen() でダブルバイト文字の判定をする場合に定義する。
+<p>
+  <dt>RK_USE_MMAP
+  <dd>unixライクなOSで mmap() システムコールが使用できる場合に定義する。
+<p>
+  <dt>RK_FUNCTIONS_ALIGNED
+  <dd>関数アドレスが適当にアラインされていることを仮定する。特定の状況下で
+      このことを関数アドレスとそれ以外の値の識別に使用する。
+<p>
+  <dt>RK_LDSO_DLFCN
+  <dd>dlopen() がない場合はこの定義を削除する。この場合共有オブジェクト
+      を動的にロードする機能がサポートされなくなる。
+      詳細は ldso.c を参照。WIN32では無視される。
+<p>
+  <dt>RK_NO_LEADING_UNDERSCORE
+  <dd>共有オブジェクトからエクスポートされたシンボルにアンダースコアが
+      付加される場合この定義を削除する。
+<p>
+  <dt>RK_JB_I386BSD
+  <dt>RK_JB_PTHREAD
+  <dd>動的にロードした共有オブジェクト内の関数を呼び出す方法を選択する
+      ためにどちらか一方を定義する。詳細は ldso.c を参照。
+      WIN32では無視される。<br>
+      RK_JB_I386BSD を定義した場合、アーキテクチャはIntex x86 ファミリー、
+      jmp_buf のレイアウトは xBSD のコードと同じであるとしたコードを使う。<br>
+      RK_JB_PTHREAD を定義した場合、pthread 関数を使用したコードを使う。
+      この場合はアーキテクチャの指定も必要になる(下記参照。)<br>
+      どちらも定義しなければこの機能は無効になる。
+<p>
+  <dt>RK_ARCH_I386
+  <dd>上記 RK_JB_PTHREAD を定義した場合にアーキテクチャを指定するために
+      定義する。
+<p>
+  <dt>RK_W_XOR_X
+  <dd>OSがW^X機能を持つ場合に定義する。
+<p>
+  <dt>index
+  <dd>必要なら strchr に #define する。
+</dl>
+
+<a name="Makefile"><h3>Makefile.kappa -&gt; kappa/Makefile,
+	Makefile.pi -&gt; pi/Makefile</h3></a>
+  <table>
+    <tr>
+      <td>CDEBUGFLAGS</td>
+      <td>最適化、デバッグ関係のオプション</td>
+    </tr>
+    <tr>
+      <td>EXESUFFIX</td>
+      <td>実行ファイル名に自動的に付加されるサフィックス</td>
+    </tr>
+    <tr>
+      <td>CC</td>
+      <td>使用するCコンパイラ</td>
+    </tr>
+    <tr>
+      <td>CFLAGS</td>
+      <td>コンパイル時のオプション</td>
+    </tr>
+    <tr>
+      <td>PIC_CFLAGS</td>
+      <td>コンパイル時のオプション(共有ライブラリ用)</td>
+    </tr>
+    <tr>
+      <td>LDFLAGS</td>
+      <td>リンク時のオプション</td>
+    </tr>
+    <tr>
+      <td>AR</td>
+      <td>ライブラリアンの名前</td>
+    </tr>
+    <tr>
+      <td>RANLIB</td>
+      <td>ranlibプログラム(必要なければ : 等にする)</td>
+    </tr>
+    <tr>
+      <td>SYSLIBS</td>
+      <td>標準のもの以外に必要なライブラリ</td>
+    </tr>
+    <tr>
+      <td>BASEDIR</td>
+      <td>インストール先ディレクトリ</td>
+    </tr>
+    <tr>
+      <td>BINDIR</td>
+      <td>実行ファイルのインストール先</td>
+    </tr>
+    <tr>
+      <td>LIBDIR</td>
+      <td>ヘッダファイル、ライブラリのインストール先</td>
+    </tr>
+    <tr>
+      <td>SHLIBDIR</td>
+      <td>共有ライブラリのインストール先</td>
+    </tr>
+  </table>
+
+<a name="CMakefile"><h3>Makefile.pi.compiler -&gt; pi/compiler/Makefile</h3></a>
+  <table>
+    <tr>
+      <td>EXESUFFIX</td>
+      <td>上と同じ</td>
+    </tr>
+    <tr>
+      <td>AOUT</td>
+      <td>実行ファイル名を指定しない時にリンカが出力するファイル名</td>
+    </tr>
+    <tr>
+      <td>LIBS</td>
+      <td>生成するライブラリ</td>
+    </tr>
+    <tr>
+      <td>SHLIB</td>
+      <td>生成する共有ライブラリ</td>
+    </tr>
+    <tr>
+      <td>PROGS</td>
+      <td>生成する実行ファイル</td>
+    </tr>
+    <tr>
+      <td>INSTAMACRO</td>
+      <td>インストール時の追加ターゲット</td>
+    </tr>
+    <tr>
+      <td>PISCAUX</td>
+      <td>コンパイラにリンクする追加モジュール</td>
+    </tr>
+    <tr>
+      <td>PIWAUX</td>
+      <td>ウィンドウズ版インタプリタにリンクする追加モジュール</td>
+    </tr>
+    <tr>
+      <td>RANLIB</td>
+      <td>上と同じ</td>
+    </tr>
+    <tr>
+      <td>SYSLIBS</td>
+      <td>追加ライブラリ、pislのオプションなので -aux が必要</td>
+    </tr>
+    <tr>
+      <td>LIB_PISLFLAGS</td>
+      <td>ライブラリモジュールを作成する時のpislのオプション</td>
+    </tr>
+    <tr>
+      <td>PIC_PISLFLAGS</td>
+      <td>共有ライブラリモジュールを作成する時のpislのオプション</td>
+    </tr>
+    <tr>
+      <td>APP_PISLFLAGS</td>
+      <td>アプリケーションモジュールを作成する時のpislのオプション</td>
+    </tr>
+    <tr>
+      <td>AR</td>
+      <td>ライブラリアンの名前</td>
+    </tr>
+    <tr>
+      <td>LD</td>
+      <td>共有ライブラリを作成するリンカの名前</td>
+    </tr>
+    <tr>
+      <td>LIBBASE</td>
+      <td>DLLのベースアドレスを指定するリンカオプション</td>
+    </tr>
+  </table>
+
+<a name="Config_scm"><h3>config.scm -&gt; pi/compiler/config.scm</h3></a>
+  <table>
+    <tr>
+      <td>cm-path-separate-char</td>
+      <td>パス名中のディレクトリ区切り文字</td>
+    </tr>
+    <tr>
+      <td>cm-list-separate-char</td>
+      <td>サーチパスの要素を区切る文字</td>
+    </tr>
+    <tr>
+      <td>cm-always-static</td>
+      <td>ランタイムライブラリを共有化できる場合 #f に展開する</td>
+    </tr>
+    <tr>
+      <td>cc-command-str</td>
+      <td>Cコンパイラのコマンドライン</td>
+    </tr>
+    <tr>
+      <td>cm-cc-command</td>
+      <td>cc-command-str で対応できない場合こちらで記述</td>
+    </tr>
+    <tr>
+      <td>cm-cc-line</td>
+      <td>cm-cc-command でも対応できない場合こちらで記述</td>
+    </tr>
+    <tr>
+      <td>ld-command-str</td>
+      <td>リンカのコマンドライン</td>
+    </tr>
+    <tr>
+      <td>cm-ld-command</td>
+      <td>ld-command-str で対応できない場合こちらで記述</td>
+    </tr>
+    <tr>
+      <td>ld-lib-str</td>
+      <td>リンク時のライブラリ指定</td>
+    </tr>
+    <tr>
+      <td>cm-ld-lib</td>
+      <td>ld-lib-str で対応できない場合こちらで記述</td>
+    </tr>
+    <tr>
+      <td>cm-add-base-option</td>
+      <td>pisl の -base オプションに対応するリンカのオプション</td>
+    </tr>
+    <tr>
+      <td>output-option-str</td>
+      <td>リンク時の実行ファイル名指定オプション</td>
+    </tr>
+    <tr>
+      <td>cm-add-output-option</td>
+      <td>output-option-str で対応できない場合こちらで記述</td>
+    </tr>
+    <tr>
+      <td>obj-suffix-str</td>
+      <td>オブジェクトファイルのサフィックス</td>
+    </tr>
+    <tr>
+      <td>cm-add-module</td>
+      <td>obj-suffix-str で対応できない場合こちらで記述</td>
+    </tr>
+    <tr>
+      <td>cm-default-exe-suffix</td>
+      <td>実行/共有オブジェクトファイル名につくサフィックス、ないなら #f</td>
+    </tr>
+    <tr>
+      <td>cm-exit-status</td>
+      <td>system の返す値からステータスを求める式</td>
+    </tr>
+    <tr>
+      <td>cm-platform-id</td>
+      <td>(rp:identify-platform) の返すリスト</td>
+    </tr>
+    <tr>
+      <td>cm-lib-environment-var</td>
+      <td>ヘッダファイル、ライブラリの場所を示す環境変数名</td>
+    </tr>
+    <tr>
+      <td>cm-macro-path-var</td>
+      <td>マクロパッケージのサーチパスを示す環境変数名</td>
+    </tr>
+    <tr>
+      <td>cm-startup-cmd-var</td>
+      <td>インタプリタの起動時自動実行コマンドを示す環境変数名</td>
+    </tr>
+    <tr>
+      <td>cm-sigint-no</td>
+      <td>signal.h での SIGINT の値</td>
+    </tr>
+  </table>
+
+<a name="Runtime"><h2>使用時の環境設定</h2></a>
+  環境変数 RHIZOME_LIB にヘッダファイル、ライブラリをインストールした
+  ディレクトリのパスを設定する。
+<hr>
+<h5><a href="index.html#Others">インデックス</h5>
+</body>
+</html>
