@@ -1,97 +1,99 @@
 <html>
-<!-- $Id: index.html,v 1.10 2005/11/10 08:47:34 qfwfq Exp $ -->
+<!-- $Id: index-e.html,v 1.10 2005/11/10 08:47:34 qfwfq Exp $ -->
 
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=ISO-2022-JP">
 <meta name="keywords" content="scheme r5rs lisp interpreter compiler unix win32">
 <title>rhizome/pi</title>
 </head>
 
 <body>
-English version of document is <a href="index-e.html">here</a>.
+Japanese version of document is <a href=".">here</a>.
 <h5 align=right>
 Qfwfq Opus 1
 <br>
-ALGOL N の思い出に捧ぐ
+Dedicated to the memory of ALGOL N
 <br>
-犬島 克 <a href="mailto:qfwfq@kt.rim.or.jp">qfwfq@kt.rim.or.jp</a>
+INUJIMA, Masaru <a href="mailto:qfwfq@kt.rim.or.jp">qfwfq@kt.rim.or.jp</a>
 </h5>
 
 <h1 align=left>rhizome/pi</h1>
 
-rhizome/pi は
-<a href="ftp://swissnet.ai.mit.edu/pub/scheme-reports/">R^5RS</a>
-の仕様を満たすScheme処理系(インタプリタ及びコンパイラ、
-コンパイラはC言語のプログラムを生成)です。
+rhizome/pi is a Scheme implementation (interpreter and compiler,
+compiler generates program in C language) conforming to
+<a href="ftp://swissnet.ai.mit.edu/pub/scheme-reports/">R^5RS</a>.
 <ul>
-  <li><a href="http://www.kt.rim.or.jp/~qfwfq/packages/rhizome-0.57.tar.gz">
-      rhizome-0.57.tar.gz</a>をダウンロード
+  <li>Download
+      <a href="http://www.kt.rim.or.jp/~qfwfq/packages/rhizome-0.57.tar.gz">
+      rhizome-0.57.tar.gz</a>.
 </ul>
-<a href="#Character">特徴</a>/
-<a href="#Environment">サポートする動作環境</a>/
-<a href="#Others">他のドキュメント</a>
+<a href="#Character">Characteristics</a>/
+<a href="#Environment">Supported environments</a>/
+<a href="#Others">Other documents</a>
 
-<a name="Character"><h2>特徴</h2></a>
+<a name="Character"><h2>Characteristics</h2></a>
 <ul>
   <li>
-    完全な continuation passing style による実装である。機械語レベル
-    では一切再帰呼び出しを行っていないため、スタックの深さが定数で
-    押えられる(具体的な上限値は調べていないが、1Kバイトを越えること
-    は無いと思われる。)
+    It is implemented completely in continuation passing style.
+    Being so, it never makes recurseive call in machine labguage
+    level, and depth of stack is bound to finite constant (I did
+    not investigate the precise limit, but it must be no greater
+    than 1 kilobytes.)
   <li>
-    call-with-current-continuation の実行及びその結果生成される
-    continuation の適用は非常に高速である。それらに要する処理時間は
-    その他の手続き(car, cdr, cons 等)の適用と何ら変わるところがない。
+    Application of call-with-current-continuation and resulting
+    comtinuation object is very fast. Execution time of them is
+    no greater than normal procedures (such as car, cdr, cons.)
   <li>
-    低レベルマクロシステムとして syntax-case を採用。
+    Employes syntax-case as low level macro system.
   <li>
-    trace 以外にLISPコードのシングルステップが可能なデバッガが用意
-    されている。デバッガ自身も大部分がLISPコードで記述されており、
-    独自のデバッグ機能を作成することも可能である(ただし現状では評価
-    機能をフックする手続きについては十分なドキュメントが用意されて
-    いない。)
+    Aside from trace, there is a debugger capable of single stepping
+    of LISP code. This debugger itself is mostly written in LISP
+    code, and implementing custom debugging feature is also possible
+    (but, procedures for hooking evaluator are not fully documented
+    yet.)
   <li>
-    エラーハンドリング、シグナルハンドリングが可能。
+    Handling errors and signals are possible.
   <li>
-    コンパイル可能なプログラムについて制約がない。コンパイルされた
-    プログラムを実行するとloadされた時と同様にトップレベルの式が順
-    に評価される。
+    There is no limitation of program which may be compiled. Execution
+    of compiled program is done simillary to loading, by sequential
+    evaluation of top level expressions.
   <li>
-    共有オブジェクト(Win32ではDLL)を動的にロードし、中の関数をscheme
-    コードから呼び出すことができる。さらにコールバック関数をscheme
-    コードで記述できる。詳細は <a href="extfunc.txt">doc/extfunc.j</a> を参照。
+    Shared objects (DLLs in term of Win32) can be loaded dynamically
+    and functions in them can be called from scheme code. Moreover,
+    callbacks can be written in scheme code.
+    See <a href="extfunc-e.txt">doc/extfunc</a> for details.
 </ul>
-  この処理系はいわゆる人工知能研究のツールとしての使用のみを意図
-  した物ではなく、汎用のアプリケーション開発・実行環境としての使用
-  に耐えるものを目指して開発したものです。
+  This implementation is not aimed to solely as tools for study of
+  so called artificial intelligence, but intended to be used as a
+  general purpose developing and executing environment of applications.
 <p>
-  rhizome/kappa は rhizome/pi のランタイムサポートルーチンのうち、
-  記号処理系の言語に共通して使用できるものをある程度独立したパッ
-  ケージとしてまとめたものです。
+  rhizome/kappa is a indivisual package consisting of runtime routines
+  of rhizome/pi, which will be useful in other symbolic processing languages.
 
-<a name="Environment"><h2>サポートする動作環境</h2></a>
-  作者は以下の環境/使用Cコンパイラで動作確認を行っています。
+<a name="Environment"><h2>Supported environments</h2></a>
+  The author tested the program under following environments and C compilers.
 <ul>
   <li>OpenBSD 3.7 i386
   <li>Linux i386
-  <li>Win32 (intel) Microsoft, Borland または lcc-win32 のCコンパイラ
-  <li>Win32 (intel) Cygwin 環境
+  <li>Win32 (intel) with Microsoft, Borland or lcc-win32 C compiler
+  <li>Win32 (intel) with Cygwin environment
 </ul>
-  <a href="http://www.netbsd.org/Misc/call-it-a-duck.html">unixライクなOS</a>
-  であれば問題無く動作すると思います。
+  There should be no serious problems in porting to other
+  <a href="http://www.netbsd.org/Misc/call-it-a-duck.html">
+  unix like operating systems</a>.
 
-<a name="Others"><h2>他のドキュメント</h2></a>
+<a name="Others"><h2>Other documents</h2></a>
 <ul>
-  <li><a href="install.html">インストール手順</a>
-  <li>使用方法について
+  <li><a href="install-e.html">Installation instructions.</a>
+  <li>How to use it.
       <ul>
-	<li><a href="invoke.html">インタプリタ、コンパイラの使用方法</a>
-	<li><a href="procs.html">オリジナルの手続き等</a>
-	<li><a href="debugger.html">デバッガの使用方法</a>
-	<li><a href="caveat.html">その他注意事項</a>
+	<li><a href="invoke-e.html">Usage of interpreter and compiler.</a>
+	<li><a href="procs-e.html">Procedures and such proper to rhizome/pi.</a>
+	<li><a href="debugger-e.html">Usage of debugger.</a>
+	<li><a href="caveat-e.html">Other notes.</a>
       </ul>
 </ul>
 <hr>
-<h5><a href="http://www.kt.rim.or.jp/~qfwfq/">Qfwfq</a> こと 犬島のホーム</h5>
+<h5>Home of INUJIMA aka
+<a href="http://www.kt.rim.or.jp/~qfwfq/index-e.html">Qfwfq</a></h5>
 </body>
 </html>
